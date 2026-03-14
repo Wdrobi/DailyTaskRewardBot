@@ -629,6 +629,45 @@ h1 {
   box-shadow: 0 14px 32px rgba(26, 192, 92, 0.24);
 }
 
+.withdraw-button[disabled] {
+  cursor: not-allowed;
+  opacity: 0.7;
+  box-shadow: none;
+  background: linear-gradient(90deg, #5c6370, #474d57);
+}
+
+.withdraw-req-info {
+  margin-top: 14px;
+  color: var(--muted-soft);
+  line-height: 1.6;
+}
+
+.withdraw-form-group {
+  display: grid;
+  gap: 8px;
+  margin-bottom: 14px;
+}
+
+.withdraw-label {
+  font-size: 13px;
+  color: var(--muted-soft);
+}
+
+.withdraw-input {
+  width: 100%;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 13px 14px;
+  background: rgba(36, 23, 35, 0.52);
+  color: var(--text);
+  outline: none;
+  font: inherit;
+}
+
+.withdraw-input:focus {
+  border-color: rgba(127, 40, 255, 0.8);
+}
+
 .referral-top-grid {
   margin-top: 4px;
 }

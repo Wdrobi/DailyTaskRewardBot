@@ -8,11 +8,25 @@ import json
 import logging
 import re
 import sqlite3
+import hmac
+import hashlib
+from urllib.parse import parse_qsl
 from typing import Any
 
 from aiohttp import web
 
-from config import ADMIN_API_TOKEN, ADMIN_API_PORT, ADMIN_USERNAME, ADMIN_PASSWORD
+from config import (
+    ADMIN_API_TOKEN,
+    ADMIN_API_PORT,
+    ADMIN_USERNAME,
+    ADMIN_PASSWORD,
+    BOT_TOKEN,
+    MIN_WITHDRAWAL_BDT,
+    MIN_WITHDRAWAL_POINTS,
+    MIN_ACTIVE_REFERRALS,
+    POINTS_PER_TAKA,
+    WITHDRAWAL_ENABLED,
+)
 from database import Database
 
 logger = logging.getLogger(__name__)
@@ -107,6 +121,71 @@ def _parse_task_payload(body: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def _verify_telegram_init_data(init_data: str) -> dict[str, Any] | None:
+    if not init_data or not BOT_TOKEN:
+        return None
+
+    parsed = dict(parse_qsl(init_data, keep_blank_values=True))
+    received_hash = parsed.pop("hash", "")
+    if not received_hash:
+        return None
+
+    data_check_string = "\n".join(f"{k}={v}" for k, v in sorted(parsed.items()))
+    secret_key = hmac.new(b"WebAppData", BOT_TOKEN.encode(), hashlib.sha256).digest()
+    calculated_hash = hmac.new(secret_key, data_check_string.encode(), hashlib.sha256).hexdigest()
+
+    if not hmac.compare_digest(calculated_hash, received_hash):
+        return None
+
+    user_raw = parsed.get("user")
+    if not user_raw:
+        return None
+
+    try:
+        user = json.loads(user_raw)
+    except json.JSONDecodeError:
+        return None
+
+    if not isinstance(user, dict) or not user.get("id"):
+        return None
+    return user
+
+
+async def _mini_withdrawal_state(db: Database, user_id: int) -> dict[str, Any] | None:
+    user = await db.get_user(user_id)
+    if not user or user.get("is_banned"):
+        return None
+
+    points = int(user.get("points", 0))
+    balance_bdt = round(points / POINTS_PER_TAKA, 2)
+    active_referrals = await db.get_referral_count(user_id)
+    has_pending = await db.has_pending_withdrawal(user_id)
+    missing_points = max(MIN_WITHDRAWAL_POINTS - points, 0)
+    missing_referrals = max(MIN_ACTIVE_REFERRALS - active_referrals, 0)
+
+    can_withdraw = (
+        WITHDRAWAL_ENABLED
+        and points >= MIN_WITHDRAWAL_POINTS
+        and active_referrals >= MIN_ACTIVE_REFERRALS
+        and not has_pending
+    )
+
+    return {
+        "user_id": user_id,
+        "points": points,
+        "balance_bdt": balance_bdt,
+        "active_referrals": active_referrals,
+        "min_withdrawal_bdt": MIN_WITHDRAWAL_BDT,
+        "min_withdrawal_points": MIN_WITHDRAWAL_POINTS,
+        "min_active_referrals": MIN_ACTIVE_REFERRALS,
+        "withdraw_enabled": WITHDRAWAL_ENABLED,
+        "has_pending_withdrawal": has_pending,
+        "missing_points": missing_points,
+        "missing_referrals": missing_referrals,
+        "can_withdraw": can_withdraw,
+    }
+
+
 # ──────────────────────────────────────────────
 # Login
 # ──────────────────────────────────────────────
@@ -132,9 +211,102 @@ async def handle_options(request: web.Request) -> web.Response:
         status=204,
         headers={
             "Access-Control-Allow-Origin": "*",
-            "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
+            "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
             "Access-Control-Allow-Headers": "Authorization, Content-Type",
         },
+    )
+
+
+# ──────────────────────────────────────────────
+# Mini App (Telegram WebApp)
+# ──────────────────────────────────────────────
+async def mini_withdrawal_state(request: web.Request) -> web.Response:
+    try:
+        body = await request.json()
+        init_data = str(body.get("init_data", "")).strip()
+    except Exception:
+        return _bad_request("Invalid JSON")
+
+    tg_user = _verify_telegram_init_data(init_data)
+    if not tg_user:
+        return _unauthorized()
+
+    user_id = int(tg_user["id"])
+    db: Database = request.app["db"]
+    state = await _mini_withdrawal_state(db, user_id)
+    if not state:
+        return _not_found("User not found or banned")
+    return _json(state)
+
+
+async def mini_create_withdrawal(request: web.Request) -> web.Response:
+    try:
+        body = await request.json()
+        init_data = str(body.get("init_data", "")).strip()
+        payment_method = str(body.get("payment_method", "")).strip().lower()
+        payment_number = str(body.get("payment_number", "")).strip()
+    except Exception:
+        return _bad_request("Invalid JSON")
+
+    tg_user = _verify_telegram_init_data(init_data)
+    if not tg_user:
+        return _unauthorized()
+
+    if payment_method not in {"bkash", "nagad", "rocket"}:
+        return _bad_request("Invalid payment method")
+
+    if not (payment_number.isdigit() and len(payment_number) == 11 and payment_number.startswith("01")):
+        return _bad_request("Invalid payment number")
+
+    user_id = int(tg_user["id"])
+    db: Database = request.app["db"]
+    state = await _mini_withdrawal_state(db, user_id)
+    if not state:
+        return _not_found("User not found or banned")
+
+    if not state["withdraw_enabled"]:
+        return _bad_request("Withdrawal is currently disabled")
+
+    if state["has_pending_withdrawal"]:
+        return _bad_request("You already have a pending withdrawal request")
+
+    if state["missing_points"] > 0 or state["missing_referrals"] > 0:
+        reasons: list[str] = []
+        if state["missing_points"] > 0:
+            reasons.append(
+                f"Need at least {MIN_WITHDRAWAL_BDT} BDT ({MIN_WITHDRAWAL_POINTS} points)"
+            )
+        if state["missing_referrals"] > 0:
+            reasons.append(
+                f"Need {MIN_ACTIVE_REFERRALS} active referrals"
+            )
+        return _bad_request(" | ".join(reasons))
+
+    points = int(state["points"])
+    if points <= 0:
+        return _bad_request("Insufficient points")
+
+    deducted = await db.deduct_points(user_id, points)
+    if not deducted:
+        return _bad_request("Insufficient points")
+
+    withdrawal_id = await db.create_withdrawal(user_id, points, payment_method, payment_number)
+    if not withdrawal_id:
+        await db.add_points(user_id, points)
+        return _json({"error": "Failed to create withdrawal"}, 500)
+
+    updated_state = await _mini_withdrawal_state(db, user_id)
+    return _json(
+        {
+            "ok": True,
+            "withdrawal": {
+                "id": withdrawal_id,
+                "amount": round(points / POINTS_PER_TAKA, 2),
+                "status": "pending",
+                "method": payment_method,
+            },
+            "wallet_state": updated_state,
+        }
     )
 
 
@@ -361,6 +533,8 @@ def create_app(db: Database) -> web.Application:
     app.router.add_route("OPTIONS", "/{path_info:.*}", handle_options)
     app.router.add_post("/api/login", login)
     app.router.add_get("/api/stats", get_stats)
+    app.router.add_post("/api/mini/withdrawal_state", mini_withdrawal_state)
+    app.router.add_post("/api/mini/withdraw", mini_create_withdrawal)
     app.router.add_get("/api/withdrawals", get_withdrawals)
     app.router.add_post("/api/withdrawals/{id}/approve", approve_withdrawal)
     app.router.add_post("/api/withdrawals/{id}/reject", reject_withdrawal)

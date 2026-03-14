@@ -102,6 +102,7 @@ async def _build_mini_app_url(db: Database, user_id: int) -> str:
     referrals = await db.get_user_referrals(user_id)
     withdrawals = await db.get_user_withdrawals(user_id)
     ref_count = await db.get_referral_count(user_id)
+    today_summary = await db.get_user_today_summary(user_id)
 
     task_payload: list[dict] = []
     total_limit = 0
@@ -127,6 +128,7 @@ async def _build_mini_app_url(db: Database, user_id: int) -> str:
                 "reward": round(task["reward_points"] / POINTS_PER_TAKA, 2),
                 "buttonText": task["button_text"],
                 "remaining": max(task["daily_limit"] - completed_today, 0),
+                "completedCount": completed_today,
                 "dailyLimit": task["daily_limit"],
                 "verifySeconds": task["verify_seconds"],
                 "completed": completed_today >= task["daily_limit"],
@@ -162,6 +164,7 @@ async def _build_mini_app_url(db: Database, user_id: int) -> str:
         "adsLimit": str(watch_ad_limit),
         "referrals": str(ref_count),
         "progress": str(progress),
+        "pointsToday": str(round(today_summary["points_earned"] / POINTS_PER_TAKA, 2)),
         "tasksCompleted": str(total_completed),
         "referralReward": f"{REFERRAL_REWARD / POINTS_PER_TAKA:.2f}",
         "tutorialUrl": TUTORIAL_VIDEO_URL,

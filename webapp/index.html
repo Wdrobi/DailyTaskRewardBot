@@ -180,6 +180,45 @@
         </section>
       </section>
 
+      <section class="screen" data-screen="withdraw-request">
+        <header class="page-header center-header wallet-header">
+          <h2>Withdrawal Request</h2>
+          <p>Submit payment details</p>
+        </header>
+
+        <section class="list-card wallet-history-card">
+          <div class="list-header">
+            <h3>Requirements</h3>
+            <span class="muted-note" id="withdrawReqBadge">Checking...</span>
+          </div>
+          <div id="withdrawReqInfo" class="withdraw-req-info">Loading...</div>
+        </section>
+
+        <section class="list-card wallet-history-card">
+          <div class="list-header">
+            <h3>Payment Details</h3>
+            <span class="muted-note">Personal number only</span>
+          </div>
+
+          <div class="withdraw-form-group">
+            <label class="withdraw-label" for="withdrawMethodSelect">Payment Method</label>
+            <select id="withdrawMethodSelect" class="withdraw-input" title="Payment method">
+              <option value="bkash">bKash</option>
+              <option value="nagad">Nagad</option>
+              <option value="rocket">Rocket</option>
+            </select>
+          </div>
+
+          <div class="withdraw-form-group">
+            <label class="withdraw-label" for="withdrawNumberInput">Personal Number</label>
+            <input id="withdrawNumberInput" class="withdraw-input" type="tel" inputmode="numeric" placeholder="01XXXXXXXXX" maxlength="11" autocomplete="tel">
+          </div>
+
+          <button class="withdraw-button" id="submitWithdrawButton" type="button">Submit Request</button>
+          <button class="primary-button alt-button" data-action="wallet" data-target="wallet" type="button">Back to Wallet</button>
+        </section>
+      </section>
+
       <section class="screen support-screen" data-screen="support">
         <header class="page-header center-header support-header">
           <h2>Support Center</h2>

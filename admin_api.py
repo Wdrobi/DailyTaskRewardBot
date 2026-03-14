@@ -215,8 +215,8 @@ def create_app(db: Database) -> web.Application:
     app.router.add_post("/api/users/{id}/unban", unban_user)
     app.router.add_post("/api/users/{id}/add_points", add_points)
 
-    # static admin panel
-    app.router.add_static("/admin", path="webapp", name="admin_static")
+    # static admin panel — serve webapp folder at root so /admin/index.html works
+    app.router.add_static("/", path="webapp", name="admin_static", show_index=True)
 
     return app
 
@@ -230,4 +230,4 @@ async def start_admin_api(db: Database) -> None:
     await runner.setup()
     site = web.TCPSite(runner, "0.0.0.0", ADMIN_API_PORT)
     await site.start()
-    logger.info(f"অ্যাডমিন API চালু: http://0.0.0.0:{ADMIN_API_PORT}/admin/admin.html")
+    logger.info(f"অ্যাডমিন API চালু: http://0.0.0.0:{ADMIN_API_PORT}/admin/")

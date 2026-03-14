@@ -423,8 +423,8 @@ async function doLogin() {
     const data = await res.json();
     if (!res.ok) { errEl.textContent = data.error || "Login failed."; return; }
     TOKEN = data.token;
-    sessionStorage.setItem("admin_token", TOKEN);
-    sessionStorage.setItem("admin_api_url", API_URL);
+    localStorage.setItem("admin_token", TOKEN);
+    localStorage.setItem("admin_api_url", API_URL);
     showApp();
   } catch(e) {
     errEl.textContent = "Cannot reach server: " + e.message;
@@ -432,8 +432,8 @@ async function doLogin() {
 }
 
 function doLogout() {
-  sessionStorage.removeItem("admin_token");
-  sessionStorage.removeItem("admin_api_url");
+  localStorage.removeItem("admin_token");
+  localStorage.removeItem("admin_api_url");
   API_URL = TOKEN = "";
   document.getElementById("adminApp").style.display    = "none";
   document.getElementById("loginScreen").style.display = "flex";
@@ -738,20 +738,14 @@ document.getElementById("pointsModal").addEventListener("click",  e => { if(e.ta
 // Auto-login from sessionStorage
 // ──────────────────────────────────────────────
 (function init() {
-  // Pre-fill server URL with smart default
-  const origin = window.location.origin;
-  const smartDefault = (origin && origin !== 'null' && !origin.startsWith('file'))
-    ? origin
-    : 'http://localhost:8080';
-  document.getElementById("serverUrlInput").value = smartDefault;
+  // Restore last-used API URL from localStorage, default to localhost:8080
+  const savedUrl   = localStorage.getItem("admin_api_url");
+  const savedToken = localStorage.getItem("admin_token");
+  document.getElementById("serverUrlInput").value = savedUrl || "http://localhost:8080";
 
-  // Auto-login from sessionStorage
-  const url   = sessionStorage.getItem("admin_api_url");
-  const token = sessionStorage.getItem("admin_token");
-  if (url && token) {
-    document.getElementById("serverUrlInput").value = url;
-    API_URL = url;
-    TOKEN   = token;
+  if (savedUrl && savedToken) {
+    API_URL = savedUrl;
+    TOKEN   = savedToken;
     showApp();
   }
 })();

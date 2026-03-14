@@ -79,4 +79,7 @@ async def main() -> None:
 
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    try:
+        asyncio.run(main())
+    except KeyboardInterrupt:
+        logger.info("বট ম্যানুয়ালি বন্ধ করা হয়েছে।")

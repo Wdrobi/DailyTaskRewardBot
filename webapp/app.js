@@ -1,9 +1,12 @@
 const tg = window.Telegram?.WebApp;
 const params = new URLSearchParams(window.location.search);
+const DAILY_AD_LIMIT = 30;
 
 const getParam = (key, fallback) => params.get(key) ?? fallback;
 const getNumber = (key, fallback) => {
-  const value = Number(params.get(key));
+  const raw = params.get(key);
+  if (raw === null) return fallback;
+  const value = Number(raw);
   return Number.isFinite(value) ? value : fallback;
 };
 
@@ -25,12 +28,12 @@ const state = {
   name: getParam("name", tg?.initDataUnsafe?.user?.first_name || "User"),
   balance: getNumber("balance", 270),
   adsToday: getNumber("adsToday", 4),
-  adsLimit: getNumber("adsLimit", 30),
+  adsLimit: DAILY_AD_LIMIT,
   referrals: getNumber("referrals", 0),
   progress: getNumber("progress", 38),
   pointsToday: getNumber("pointsToday", 24),
   tasksCompleted: getNumber("tasksCompleted", 2),
-  referralReward: getNumber("referralReward", 100),
+  referralReward: getNumber("referralReward", 50),
   supportUrl: getParam("supportUrl", "https://t.me/dailyrichbot"),
   tutorialUrl: getParam("tutorialUrl", "https://youtube.com/watch?v=your_video_id"),
   referralCode: getParam("ref", `start=${Math.random().toString(36).slice(2, 9)}`),
@@ -55,6 +58,8 @@ const els = {
   goalHelperText: document.getElementById("goalHelperText"),
   referralTotal: document.getElementById("referralTotal"),
   referralEarnings: document.getElementById("referralEarnings"),
+  referralRewardHeader: document.getElementById("referralRewardHeader"),
+  referralRewardBanner: document.getElementById("referralRewardBanner"),
   referralLinkInput: document.getElementById("referralLinkInput"),
   copyReferralButton: document.getElementById("copyReferralButton"),
   shareReferralButton: document.getElementById("shareReferralButton"),
@@ -105,11 +110,41 @@ function popup(title, message) {
   window.alert(`${title}\n\n${message}`);
 }
 
+function taskIconMarkup(taskKey) {
+  const icons = {
+    watch_ad: `
+      <svg class="task-glyph" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+        <rect x="4" y="6" width="16" height="12" rx="3" stroke="currentColor" stroke-width="1.8"/>
+        <path d="M10 9.5v5l4-2.5-4-2.5Z" fill="currentColor"/>
+      </svg>
+    `,
+    visit_site: `
+      <svg class="task-glyph" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+        <circle cx="12" cy="12" r="8" stroke="currentColor" stroke-width="1.8"/>
+        <path d="M4.5 12h15M12 4.5c2.2 2.25 3.4 4.75 3.4 7.5S14.2 17.25 12 19.5M12 4.5c-2.2 2.25-3.4 4.75-3.4 7.5s1.2 5.25 3.4 7.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
+      </svg>
+    `,
+    daily_checkin: `
+      <svg class="task-glyph" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+        <circle cx="10" cy="12" r="4.5" stroke="currentColor" stroke-width="1.8"/>
+        <circle cx="14.5" cy="10" r="4" stroke="currentColor" stroke-width="1.8" opacity="0.75"/>
+        <path d="M10 9.5v5M8 11.3h4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+      </svg>
+    `,
+  };
+
+  return icons[taskKey] || `
+    <svg class="task-glyph" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <path d="M8 7h11M8 12h11M8 17h11M4.5 7.25h.5M4.5 12.25h.5M4.5 17.25h.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+    </svg>
+  `;
+}
+
 function render() {
   const initial = state.name.trim().charAt(0).toUpperCase() || "D";
   els.avatarInitial.textContent = initial;
   els.miniAvatarInitial.textContent = initial;
-  els.displayName.textContent = `Hi, ${state.name}`;
+  els.displayName.textContent = `Hi, ${state.name} 👋`;
   els.balanceValue.textContent = `BDT ${currency.format(state.balance)}`;
   els.tasksBalanceValue.textContent = formatMoney(state.balance);
   els.walletBalanceValue.textContent = formatMoney(state.balance);
@@ -117,10 +152,15 @@ function render() {
   els.referralsCount.textContent = String(state.referrals);
   els.homeTasksCompleted.textContent = String(state.tasksCompleted);
   els.goalsCounter.textContent = `${state.adsToday} / ${state.adsLimit}`;
-  els.goalProgressFill.style.width = `${Math.max(5, Math.min(state.progress, 100))}%`;
+  const progressPercent = state.adsLimit > 0
+    ? Math.min((state.adsToday / state.adsLimit) * 100, 100)
+    : 0;
+  els.goalProgressFill.style.width = `${Math.max(progressPercent, 0)}%`;
   els.goalHelperText.textContent = `You have ${Math.max(state.adsLimit - state.adsToday, 0)} tasks remaining today`;
   els.referralTotal.textContent = String(state.referrals);
   els.referralEarnings.textContent = formatMoney(state.referrals * state.referralReward);
+  if (els.referralRewardHeader) els.referralRewardHeader.textContent = formatMoney(state.referralReward);
+  if (els.referralRewardBanner) els.referralRewardBanner.textContent = formatMoney(state.referralReward);
   els.referralLinkInput.value = referralLink();
   els.friendCountNote.textContent = `${state.referrals} Friends`;
   renderTasks();
@@ -134,34 +174,66 @@ function renderTasks() {
       taskKey: "watch_ad",
       title: "Watch Ads",
       description: "Earn by watching ads",
-      reward: 0.25,
+      reward: 3.00,
       buttonText: "Watch Ad",
-      remaining: 0,
-      dailyLimit: 0,
+      remaining: Math.max(DAILY_AD_LIMIT - state.adsToday, 0),
+      dailyLimit: DAILY_AD_LIMIT,
       verifySeconds: 15,
       completed: false,
       kind: "link",
     },
+    {
+      taskKey: "visit_site",
+      title: "Website Visit",
+      description: "Visit the sponsor website and stay for a few seconds",
+      reward: 4.00,
+      buttonText: "Visit Website",
+      remaining: 15,
+      dailyLimit: 15,
+      verifySeconds: 10,
+      completed: false,
+      kind: "link",
+    },
+    {
+      taskKey: "daily_checkin",
+      title: "Daily Check-In",
+      description: "Claim your instant daily bonus once per day",
+      reward: 2.00,
+      buttonText: "Claim Bonus",
+      remaining: 1,
+      dailyLimit: 1,
+      verifySeconds: 0,
+      completed: false,
+      kind: "instant",
+    },
   ];
 
   els.taskListContainer.innerHTML = tasks.map((task, index) => {
-    const badge = task.completed ? "Completed" : (task.kind === "instant" ? "Instant" : (index === 0 ? "Play" : "Visit"));
-    const cardClass = task.completed ? "task-card task-card-muted" : (index === 0 ? "task-card task-card-primary" : "task-card");
-    const rewardClass = task.completed ? "reward-pill reward-pill-muted" : "reward-pill reward-pill-green";
-    const buttonClass = task.completed ? "primary-button disabled-button" : (index % 2 === 0 ? "primary-button" : "primary-button alt-button");
-    const buttonLabel = task.completed ? "Completed" : escapeHtml(task.buttonText || "Open Task");
+    const isWatchAdTask = task.taskKey === "watch_ad";
+    const taskCompleted = isWatchAdTask ? state.adsToday >= DAILY_AD_LIMIT : Boolean(task.completed);
+    const remainingToday = isWatchAdTask
+      ? Math.max(DAILY_AD_LIMIT - state.adsToday, 0)
+      : Math.max(Number(task.remaining ?? 0), 0);
+    const badge = taskCompleted ? "Completed" : (task.kind === "instant" ? "Instant" : (index === 0 ? "Play" : "Visit"));
+    const cardClass = taskCompleted ? "task-card task-card-muted" : (index === 0 ? "task-card task-card-primary" : "task-card");
+    const rewardClass = taskCompleted ? "reward-pill reward-pill-muted" : "reward-pill reward-pill-green";
+    const buttonClass = taskCompleted ? "primary-button disabled-button" : (index % 2 === 0 ? "primary-button" : "primary-button alt-button");
+    const buttonLabel = taskCompleted ? "Completed" : escapeHtml(task.buttonText || "Open Task");
+    const actionName = task.kind === "instant"
+      ? "instant-task"
+      : (task.taskKey === "visit_site" ? "visit-site" : "watch-ad");
     const footnote = task.kind === "instant"
-      ? `Instant reward | Remaining: ${task.remaining} left today`
-      : `Time: ${task.verifySeconds}s | Remaining: ${task.remaining} left today`;
+      ? `Instant reward | Remaining: ${remainingToday} left today`
+      : `Time: ${task.verifySeconds}s | Remaining: ${remainingToday} left today`;
 
     return `
       <article class="${cardClass}">
-        <span class="task-badge${task.completed ? ' task-badge-muted' : ''}">${escapeHtml(badge)}</span>
-        <div class="task-icon-bubble${task.completed ? ' muted-bubble' : ''}">${escapeHtml(task.title.slice(0, 2).toUpperCase())}</div>
+        <span class="task-badge${taskCompleted ? ' task-badge-muted' : ''}">${escapeHtml(badge)}</span>
+        <div class="task-icon-bubble task-icon-${escapeHtml(task.taskKey || 'default').replaceAll('_', '-')}${taskCompleted ? ' muted-bubble' : ''}">${taskIconMarkup(task.taskKey)}</div>
         <h3>${escapeHtml(task.title)}</h3>
         <p>${escapeHtml(task.description || "Complete this task and earn reward")}</p>
         <span class="${rewardClass}">+${escapeHtml(task.reward.toFixed(2))} BDT</span>
-        <button class="${buttonClass}" ${task.completed ? "disabled" : ""} data-action="${task.kind === 'instant' ? 'instant-task' : 'watch-ad'}" type="button">${buttonLabel}</button>
+        <button class="${buttonClass}" ${taskCompleted ? "disabled" : ""} data-action="${actionName}" type="button">${buttonLabel}</button>
         <small class="card-footnote">${escapeHtml(footnote)}</small>
       </article>
     `;
@@ -262,7 +334,21 @@ function handleAction(action, explicitTarget) {
   }
 
   if (action === "watch-ad") {
-    popup("Watch Ad", "এখানে bot task বা real ad endpoint connect হবে।");
+    if (state.adsToday >= state.adsLimit) {
+      popup("Limit Reached", "আজকের জন্য সর্বোচ্চ " + state.adsLimit + "টি বিজ্ঞাপন দেখা হয়ে গেছে।");
+      return;
+    }
+    if (typeof show_10728950 !== "function") {
+      popup("Please Wait", "Ad network লোড হচ্ছে। একটু পর আবার চেষ্টা করুন।");
+      return;
+    }
+    // Rewarded Interstitial
+    show_10728950().then(() => {
+      state.adsToday += 1;
+      state.balance += 3;
+      render();
+      popup("Reward Earned! 🎉", "আপনি 3.00 BDT পুরস্কার পেয়েছেন বিজ্ঞাপন দেখার জন্য!");
+    });
     return;
   }
 
@@ -272,7 +358,18 @@ function handleAction(action, explicitTarget) {
   }
 
   if (action === "visit-site") {
-    popup("Visit Site", "এখানে DB-driven site visit task connect হবে।");
+    if (typeof show_10728950 !== "function") {
+      popup("Please Wait", "Ad network লোড হচ্ছে। একটু পর আবার চেষ্টা করুন।");
+      return;
+    }
+    // Rewarded Popup
+    show_10728950("pop").then(() => {
+      state.balance += 4;
+      render();
+      popup("Reward Earned! 🎉", "আপনি 4.00 BDT পুরস্কার পেয়েছেন সাইট ভিজিট করার জন্য!");
+    }).catch(() => {
+      // user closed or error — no reward, do nothing
+    });
     return;
   }
 
@@ -344,7 +441,9 @@ function bindEvents() {
 
   els.copyReferralButton.addEventListener("click", () => handleAction("copy-referral"));
   els.shareReferralButton.addEventListener("click", () => handleAction("share-referral"));
-  els.tutorialButton.addEventListener("click", () => handleAction("tutorial"));
+  if (els.tutorialButton) {
+    els.tutorialButton.addEventListener("click", () => handleAction("tutorial"));
+  }
   els.withdrawButton.addEventListener("click", () => handleAction("withdraw"));
 }
 
@@ -358,6 +457,20 @@ function initTelegram() {
   tg.setHeaderColor("#3a1428");
   tg.setBackgroundColor("#181624");
   tg.MainButton.hide();
+
+  // In-App Interstitial — passive background ads, no reward required
+  if (typeof show_10728950 === "function") {
+    show_10728950({
+      type: "inApp",
+      inAppSettings: {
+        frequency: 2,
+        capping: 0.1,
+        interval: 30,
+        timeout: 5,
+        everyPage: false,
+      },
+    });
+  }
 }
 
 render();

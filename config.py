@@ -17,20 +17,25 @@ FORCE_JOIN_CHANNELS: list[str] = [
 _raw_admin_ids = os.getenv("ADMIN_IDS", "")
 ADMIN_IDS: list[int] = [int(x.strip()) for x in _raw_admin_ids.split(",") if x.strip().isdigit()]
 
+ADMIN_API_TOKEN: str = os.getenv("ADMIN_API_TOKEN", "")
+ADMIN_API_PORT: int = int(os.getenv("ADMIN_API_PORT", "8080"))
+ADMIN_USERNAME: str = os.getenv("ADMIN_USERNAME", "admin")
+ADMIN_PASSWORD: str = os.getenv("ADMIN_PASSWORD", "")
+
 # ---------- টাস্ক রিওয়ার্ড (পয়েন্ট) ----------
 TASK_REWARDS: dict[str, int] = {
-    "watch_ad":      5,
-    "visit_site":    3,
-    "daily_checkin": 2,
+    "watch_ad":      300,
+    "visit_site":    400,
+    "daily_checkin": 200,
 }
 
 # রেফারেল রিওয়ার্ড
-REFERRAL_REWARD: int = 20
+REFERRAL_REWARD: int = 5000
 
 # ---------- প্রতিদিনের সীমা ----------
 DAILY_TASK_LIMITS: dict[str, int] = {
-    "watch_ad":      5,
-    "visit_site":    3,
+    "watch_ad":      30,
+    "visit_site":    15,
     "daily_checkin": 1,
 }
 

@@ -13,6 +13,7 @@ from config import BOT_TOKEN
 from database import Database
 from handlers import start, tasks, wallet, admin, common
 from middlewares.throttle import ThrottlingMiddleware
+from admin_api import start_admin_api
 
 logging.basicConfig(
     level=logging.INFO,
@@ -72,7 +73,10 @@ async def main() -> None:
 
     logger.info("বট চালু হচ্ছে...")
     try:
-        await dp.start_polling(bot, allowed_updates=dp.resolve_used_update_types())
+        await asyncio.gather(
+            dp.start_polling(bot, allowed_updates=dp.resolve_used_update_types()),
+            start_admin_api(db),
+        )
     finally:
         await bot.session.close()
         logger.info("বট বন্ধ হয়েছে।")

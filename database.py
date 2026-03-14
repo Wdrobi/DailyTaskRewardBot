@@ -27,8 +27,8 @@ class Database:
                 "📺 অ্যাড দেখুন",
                 "link",
                 "https://example.com/ad",
-                5,
-                5,
+                300,
+                30,
                 3600,
                 15,
                 1,
@@ -41,8 +41,8 @@ class Database:
                 "🌐 সাইট ভিজিট করুন",
                 "link",
                 "https://example.com/site1",
-                3,
-                3,
+                400,
+                15,
                 14400,
                 10,
                 1,
@@ -55,7 +55,7 @@ class Database:
                 "✅ এখনই নিন",
                 "instant",
                 "",
-                2,
+                200,
                 1,
                 86400,
                 0,
@@ -170,6 +170,15 @@ class Database:
             )
 
             await self._seed_default_tasks(db)
+            await db.execute(
+                "UPDATE tasks SET daily_limit = 30, reward_points = 300 WHERE task_key = 'watch_ad'"
+            )
+            await db.execute(
+                "UPDATE tasks SET daily_limit = 15, reward_points = 400 WHERE task_key = 'visit_site'"
+            )
+            await db.execute(
+                "UPDATE tasks SET reward_points = 200 WHERE task_key = 'daily_checkin'"
+            )
             await db.commit()
         logger.info("ডেটাবেস সফলভাবে প্রস্তুত।")
 
@@ -515,3 +524,85 @@ class Database:
                 "SELECT user_id FROM users WHERE is_banned = 0"
             ) as cur:
                 return [row[0] for row in await cur.fetchall()]
+
+    # ──────────────────────────────────────────────
+    # অ্যাডমিন API
+    # ──────────────────────────────────────────────
+    async def get_all_users(
+        self, limit: int = 50, offset: int = 0, search: str = ""
+    ) -> list[dict]:
+        async with aiosqlite.connect(self.db_path) as db:
+            db.row_factory = aiosqlite.Row
+            if search:
+                pattern = f"%{search}%"
+                async with db.execute(
+                    "SELECT * FROM users WHERE (username LIKE ? OR full_name LIKE ? OR CAST(user_id AS TEXT) LIKE ?) "
+                    "ORDER BY joined_at DESC LIMIT ? OFFSET ?",
+                    (pattern, pattern, pattern, limit, offset),
+                ) as cur:
+                    return [dict(r) for r in await cur.fetchall()]
+            else:
+                async with db.execute(
+                    "SELECT * FROM users ORDER BY joined_at DESC LIMIT ? OFFSET ?",
+                    (limit, offset),
+                ) as cur:
+                    return [dict(r) for r in await cur.fetchall()]
+
+    async def get_users_count(self, search: str = "") -> int:
+        async with aiosqlite.connect(self.db_path) as db:
+            if search:
+                pattern = f"%{search}%"
+                async with db.execute(
+                    "SELECT COUNT(*) FROM users WHERE username LIKE ? OR full_name LIKE ? OR CAST(user_id AS TEXT) LIKE ?",
+                    (pattern, pattern, pattern),
+                ) as cur:
+                    row = await cur.fetchone()
+                    return row[0] if row else 0
+            else:
+                async with db.execute("SELECT COUNT(*) FROM users") as cur:
+                    row = await cur.fetchone()
+                    return row[0] if row else 0
+
+    async def get_all_withdrawals(
+        self, status: str = "all", limit: int = 50, offset: int = 0
+    ) -> list[dict]:
+        async with aiosqlite.connect(self.db_path) as db:
+            db.row_factory = aiosqlite.Row
+            if status == "all":
+                async with db.execute(
+                    "SELECT w.*, u.username, u.full_name FROM withdrawals w "
+                    "JOIN users u ON w.user_id = u.user_id "
+                    "ORDER BY w.requested_at DESC LIMIT ? OFFSET ?",
+                    (limit, offset),
+                ) as cur:
+                    return [dict(r) for r in await cur.fetchall()]
+            else:
+                async with db.execute(
+                    "SELECT w.*, u.username, u.full_name FROM withdrawals w "
+                    "JOIN users u ON w.user_id = u.user_id "
+                    "WHERE w.status = ? ORDER BY w.requested_at DESC LIMIT ? OFFSET ?",
+                    (status, limit, offset),
+                ) as cur:
+                    return [dict(r) for r in await cur.fetchall()]
+
+    async def get_withdrawals_count(self, status: str = "all") -> int:
+        async with aiosqlite.connect(self.db_path) as db:
+            if status == "all":
+                async with db.execute("SELECT COUNT(*) FROM withdrawals") as cur:
+                    row = await cur.fetchone()
+                    return row[0] if row else 0
+            else:
+                async with db.execute(
+                    "SELECT COUNT(*) FROM withdrawals WHERE status = ?", (status,)
+                ) as cur:
+                    row = await cur.fetchone()
+                    return row[0] if row else 0
+
+    async def admin_add_points(self, user_id: int, points: int) -> bool:
+        async with aiosqlite.connect(self.db_path) as db:
+            await db.execute(
+                "UPDATE users SET points = points + ?, total_earned = total_earned + ? WHERE user_id = ?",
+                (points, points, user_id),
+            )
+            await db.commit()
+            return db.total_changes > 0

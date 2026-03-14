@@ -20,6 +20,9 @@ env/
 bot.log
 bot_database.db
 
+# Container and deployment leftovers
+.docker/
+
 # OS/editor noise
 .DS_Store
 Thumbs.db

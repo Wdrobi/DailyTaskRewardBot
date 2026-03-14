@@ -1,0 +1,22 @@
+services:
+  - type: worker
+    name: daily-task-reward-bot
+    env: docker
+    autoDeploy: true
+    plan: starter
+    dockerfilePath: ./Dockerfile
+    envVars:
+      - key: BOT_TOKEN
+        sync: false
+      - key: ADMIN_IDS
+        sync: false
+      - key: BOT_USERNAME
+        sync: false
+      - key: FORCE_JOIN_CHANNELS
+        sync: false
+      - key: MINI_APP_URL
+        sync: false
+      - key: TUTORIAL_VIDEO_URL
+        sync: false
+      - key: DATABASE_PATH
+        value: /data/bot_database.db

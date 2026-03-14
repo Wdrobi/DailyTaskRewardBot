@@ -1,0 +1,13 @@
+[Unit]
+Description=Daily Task Reward Telegram Bot
+After=network.target
+
+[Service]
+Type=simple
+WorkingDirectory=/opt/daily-task-reward-bot
+ExecStart=/opt/daily-task-reward-bot/.venv/bin/python bot.py
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

@@ -75,7 +75,8 @@
       transition: opacity .15s;
     }
     .btn:hover { opacity: .85; }
-    .btn-primary { background: var(--accent); color: #fff; width: 100%; padding: 13px; }
+    .btn-primary { background: var(--accent); color: #fff; }
+    .login-box .btn-primary { width: 100%; padding: 13px; }
     .btn-green   { background: var(--green);  color: #fff; }
     .btn-red     { background: var(--red);    color: #fff; }
     .btn-yellow  { background: var(--yellow); color: #000; }
@@ -194,6 +195,7 @@
     .badge-rejected { background: rgba(239,68,68,.15);  color: var(--red); }
     .badge-banned   { background: rgba(239,68,68,.15);  color: var(--red); }
     .badge-active   { background: rgba(16,185,129,.15); color: var(--green); }
+    .badge-disabled { background: rgba(124,122,146,.16); color: var(--muted); }
 
     .action-row { display: flex; gap: 6px; flex-wrap: wrap; }
 
@@ -229,9 +231,14 @@
       transition: transform .2s;
     }
     .modal-backdrop.open .modal { transform: translateY(0); }
+    .modal-lg {
+      max-width: 960px;
+      max-height: calc(100vh - 40px);
+      overflow: auto;
+    }
     .modal h3 { margin-bottom: 12px; font-size: 17px; }
     .modal p { color: var(--muted); margin-bottom: 20px; font-size: 13px; line-height: 1.6; }
-    .modal input {
+    .modal input, .modal select, .modal textarea {
       width: 100%;
       padding: 10px 12px;
       background: var(--surface2);
@@ -242,7 +249,79 @@
       margin-bottom: 16px;
       outline: none;
     }
+    .modal textarea { min-height: 100px; resize: vertical; }
     .modal-actions { display: flex; gap: 10px; justify-content: flex-end; }
+
+    .grid-2 {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 12px;
+    }
+    .summary-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+      gap: 12px;
+      margin-bottom: 20px;
+    }
+    .summary-card {
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 14px;
+    }
+    .summary-card .label {
+      color: var(--muted);
+      font-size: 11px;
+      text-transform: uppercase;
+      margin-bottom: 6px;
+    }
+    .summary-card .value {
+      font-size: 18px;
+      font-weight: 700;
+    }
+    .detail-grid {
+      display: grid;
+      grid-template-columns: 1.2fr .8fr;
+      gap: 16px;
+    }
+    .detail-section {
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 14px;
+      margin-bottom: 16px;
+    }
+    .detail-section h4 {
+      font-size: 14px;
+      margin-bottom: 12px;
+    }
+    .detail-list {
+      display: grid;
+      gap: 8px;
+    }
+    .detail-item {
+      display: flex;
+      justify-content: space-between;
+      gap: 10px;
+      font-size: 13px;
+      padding-bottom: 8px;
+      border-bottom: 1px solid rgba(255,255,255,.05);
+    }
+    .detail-item:last-child { border-bottom: none; padding-bottom: 0; }
+    .muted { color: var(--muted); }
+    .checkbox-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 16px;
+      font-size: 13px;
+      color: var(--muted);
+    }
+    .checkbox-row input {
+      width: auto;
+      margin: 0;
+    }
+    .stack { display: grid; gap: 10px; }
 
     .empty { text-align: center; padding: 40px; color: var(--muted); }
     .loading { text-align: center; padding: 30px; color: var(--muted); }
@@ -269,6 +348,9 @@
       .topbar  { padding: 0 14px; }
       .tabs    { padding: 12px 14px 0; overflow-x: auto; }
       th, td   { padding: 9px 10px; }
+    }
+    @media (max-width: 900px) {
+      .detail-grid, .grid-2 { grid-template-columns: 1fr; }
     }
   </style>
 </head>
@@ -301,6 +383,7 @@
     <button class="tab-btn active" onclick="showTab('dashboard')">📊 Dashboard</button>
     <button class="tab-btn" onclick="showTab('withdrawals')">💸 Withdrawals</button>
     <button class="tab-btn" onclick="showTab('users')">👥 Users</button>
+    <button class="tab-btn" onclick="showTab('tasks')">🧩 Tasks</button>
   </nav>
 
   <div class="content">
@@ -328,7 +411,7 @@
           </div>
         </div>
         <div id="wdTableWrap"><div class="loading">Loading…</div></div>
-        <div class="pagination" id="wdPagination" style="display:none">
+        <div class="pagination" id="wdPagination" hidden>
           <button class="btn btn-ghost btn-sm" id="wdPrevBtn" onclick="wdPage(-1)">◀ Prev</button>
           <span id="wdPageInfo"></span>
           <button class="btn btn-ghost btn-sm" id="wdNextBtn" onclick="wdPage(1)">Next ▶</button>
@@ -347,11 +430,24 @@
           </div>
         </div>
         <div id="usersTableWrap"><div class="loading">Loading…</div></div>
-        <div class="pagination" id="userPagination" style="display:none">
+        <div class="pagination" id="userPagination" hidden>
           <button class="btn btn-ghost btn-sm" id="userPrevBtn" onclick="userPage(-1)">◀ Prev</button>
           <span id="userPageInfo"></span>
           <button class="btn btn-ghost btn-sm" id="userNextBtn" onclick="userPage(1)">Next ▶</button>
         </div>
+      </div>
+    </div>
+
+    <div class="tab-panel" id="tab-tasks">
+      <div class="card">
+        <div class="card-header">
+          <h3>Tasks</h3>
+          <div class="controls">
+            <button class="btn btn-primary btn-sm" onclick="openTaskModal()">+ Add Task</button>
+            <button class="btn btn-ghost btn-sm" onclick="loadTasks()">↻ Refresh</button>
+          </div>
+        </div>
+        <div id="tasksTableWrap"><div class="loading">Loading…</div></div>
       </div>
     </div>
 
@@ -383,6 +479,74 @@
   </div>
 </div>
 
+<div class="modal-backdrop" id="taskModal">
+  <div class="modal modal-lg">
+    <h3 id="taskModalTitle">Add Task</h3>
+    <div class="grid-2">
+      <div>
+        <label class="muted">Task Key</label>
+        <input id="taskKeyInput" type="text" placeholder="e.g. watch_ad_bonus">
+      </div>
+      <div>
+        <label class="muted">Title</label>
+        <input id="taskTitleInput" type="text" placeholder="Task title">
+      </div>
+      <div>
+        <label class="muted">Button Text</label>
+        <input id="taskButtonTextInput" type="text" placeholder="Button label">
+      </div>
+      <div>
+        <label class="muted">Task Kind</label>
+        <select id="taskKindInput" title="Task kind">
+          <option value="link">Link</option>
+          <option value="instant">Instant</option>
+        </select>
+      </div>
+      <div>
+        <label class="muted">Target URL</label>
+        <input id="taskTargetUrlInput" type="url" placeholder="https://example.com">
+      </div>
+      <div>
+        <label class="muted">Reward Points</label>
+        <input id="taskRewardInput" type="number" min="1" placeholder="300">
+      </div>
+      <div>
+        <label class="muted">Daily Limit</label>
+        <input id="taskDailyLimitInput" type="number" min="1" placeholder="1">
+      </div>
+      <div>
+        <label class="muted">Cooldown Seconds</label>
+        <input id="taskCooldownInput" type="number" min="0" placeholder="0">
+      </div>
+      <div>
+        <label class="muted">Verify Seconds</label>
+        <input id="taskVerifyInput" type="number" min="0" placeholder="0">
+      </div>
+      <div>
+        <label class="muted">Sort Order</label>
+        <input id="taskSortOrderInput" type="number" min="0" placeholder="100">
+      </div>
+    </div>
+    <label class="muted">Description</label>
+    <textarea id="taskDescriptionInput" placeholder="Task description"></textarea>
+    <label class="checkbox-row"><input id="taskIsActiveInput" type="checkbox" checked> Active task</label>
+    <div class="modal-actions">
+      <button class="btn btn-ghost" onclick="closeTaskModal()">Cancel</button>
+      <button class="btn btn-primary" onclick="saveTask()">Save</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-backdrop" id="userDetailModal">
+  <div class="modal modal-lg">
+    <h3>User Details</h3>
+    <div id="userDetailBody"><div class="loading">Loading…</div></div>
+    <div class="modal-actions">
+      <button class="btn btn-ghost" onclick="closeUserDetailModal()">Close</button>
+    </div>
+  </div>
+</div>
+
 <!-- Toast -->
 <div class="toast" id="toast"></div>
 
@@ -400,6 +564,8 @@ let userTotal  = 0;
 let _modalCb   = null;
 let _pointsUserId = null;
 let _searchTimer  = null;
+let _taskRows = [];
+let _taskEditId = null;
 
 // ──────────────────────────────────────────────
 // Auth
@@ -485,6 +651,7 @@ function showTab(name) {
   if (name === "dashboard")   loadDashboard();
   if (name === "withdrawals") loadWithdrawals();
   if (name === "users")       loadUsers();
+  if (name === "tasks")       loadTasks();
 }
 
 // ──────────────────────────────────────────────
@@ -615,11 +782,13 @@ function renderUsersTable(rows) {
         <td>${u.joined_at ? u.joined_at.slice(0,10) : "—"}</td>
         <td>
           <div class="action-row">
-            <button class="btn btn-yellow btn-sm" onclick="openPointsModal(${u.user_id},'${escHtml(u.full_name || u.username || String(u.user_id))}')">± Pts</button>
+            <button class="btn btn-ghost btn-sm" onclick="openUserDetailModal(${u.user_id})">View</button>
+            <button class="btn btn-yellow btn-sm" onclick='openPointsModal(${u.user_id}, ${JSON.stringify(u.full_name || u.username || String(u.user_id))})'>± Pts</button>
             ${banned
               ? `<button class="btn btn-green btn-sm" onclick="confirmAction('unban',${u.user_id},'Unban user ${u.user_id}?')">Unban</button>`
               : `<button class="btn btn-red btn-sm"   onclick="confirmAction('ban',${u.user_id},'Ban user ${u.user_id}? They cannot use the bot.')">Ban</button>`
             }
+            <button class="btn btn-red btn-sm" onclick="confirmAction('delete_user',${u.user_id},'Delete user ${u.user_id} and all related data? This cannot be undone.')">Delete</button>
           </div>
         </td>
       </tr>`;
@@ -647,7 +816,7 @@ function renderPagination(key, offset, total) {
   const info = document.getElementById(key + "PageInfo");
   const prev = document.getElementById(key + "PrevBtn");
   const next = document.getElementById(key + "NextBtn");
-  el.style.display = total > PAGE_SIZE ? "flex" : "none";
+  el.hidden = total <= PAGE_SIZE;
   const page = Math.floor(offset / PAGE_SIZE) + 1;
   const pages = Math.ceil(total / PAGE_SIZE);
   info.textContent = `Page ${page} / ${pages}  (${total} total)`;
@@ -656,7 +825,202 @@ function renderPagination(key, offset, total) {
 }
 
 function hidePagination(key) {
-  document.getElementById(key + "Pagination").style.display = "none";
+  document.getElementById(key + "Pagination").hidden = true;
+}
+
+// ──────────────────────────────────────────────
+// Tasks
+// ──────────────────────────────────────────────
+async function loadTasks() {
+  const wrap = document.getElementById("tasksTableWrap");
+  wrap.innerHTML = '<div class="loading">Loading…</div>';
+  try {
+    const data = await api("/api/tasks?include_inactive=1");
+    _taskRows = data.rows || [];
+    renderTasksTable(_taskRows);
+  } catch (e) {
+    wrap.innerHTML = `<div class="empty">Error: ${e.message}</div>`;
+  }
+}
+
+function renderTasksTable(rows) {
+  const wrap = document.getElementById("tasksTableWrap");
+  if (!rows.length) {
+    wrap.innerHTML = '<div class="empty">No tasks found.</div>';
+    return;
+  }
+  wrap.innerHTML = `<table>
+    <thead><tr>
+      <th>ID</th><th>Key</th><th>Title</th><th>Kind</th><th>Reward</th><th>Limit</th><th>Status</th><th>Completions</th><th>Actions</th>
+    </tr></thead>
+    <tbody>
+    ${rows.map(t => {
+      const active = t.is_active === 1;
+      const badge = `<span class="badge badge-${active ? "active" : "disabled"}">${active ? "Active" : "Disabled"}</span>`;
+      return `<tr>
+        <td><code>${t.id}</code></td>
+        <td><code>${escHtml(t.task_key)}</code></td>
+        <td>${escHtml(t.title)}<br><span class="muted">${escHtml(t.button_text || "—")}</span></td>
+        <td>${escHtml(t.task_kind)}</td>
+        <td><strong>${Number(t.reward_points).toLocaleString()}</strong></td>
+        <td>${t.daily_limit}/day<br><span class="muted">cd ${t.cooldown_seconds}s, verify ${t.verify_seconds}s</span></td>
+        <td>${badge}</td>
+        <td>${Number(t.total_completions || 0).toLocaleString()}<br><span class="muted">today ${Number(t.today_completions || 0).toLocaleString()}</span></td>
+        <td>
+          <div class="action-row">
+            <button class="btn btn-ghost btn-sm" onclick="openTaskModalById(${t.id})">Edit</button>
+            <button class="btn btn-yellow btn-sm" onclick="confirmAction('toggle_task',${t.id},'${active ? "Disable" : "Enable"} task ${escJs(t.title)}?')">${active ? "Disable" : "Enable"}</button>
+            <button class="btn btn-red btn-sm" onclick="confirmAction('delete_task',${t.id},'Delete task ${escJs(t.title)} permanently?')">Delete</button>
+          </div>
+        </td>
+      </tr>`;
+    }).join("")}
+    </tbody>
+  </table>`;
+}
+
+function openTaskModalById(taskId) {
+  const task = _taskRows.find(row => row.id === taskId);
+  openTaskModal(task || null);
+}
+
+function openTaskModal(task = null) {
+  _taskEditId = task ? task.id : null;
+  document.getElementById("taskModalTitle").textContent = task ? "Edit Task" : "Add Task";
+  document.getElementById("taskKeyInput").value = task?.task_key || "";
+  document.getElementById("taskTitleInput").value = task?.title || "";
+  document.getElementById("taskDescriptionInput").value = task?.description || "";
+  document.getElementById("taskButtonTextInput").value = task?.button_text || "";
+  document.getElementById("taskKindInput").value = task?.task_kind || "link";
+  document.getElementById("taskTargetUrlInput").value = task?.target_url || "";
+  document.getElementById("taskRewardInput").value = task?.reward_points || "";
+  document.getElementById("taskDailyLimitInput").value = task?.daily_limit || 1;
+  document.getElementById("taskCooldownInput").value = task?.cooldown_seconds || 0;
+  document.getElementById("taskVerifyInput").value = task?.verify_seconds || 0;
+  document.getElementById("taskSortOrderInput").value = task?.sort_order || 100;
+  document.getElementById("taskIsActiveInput").checked = task ? task.is_active === 1 : true;
+  document.getElementById("taskModal").classList.add("open");
+}
+
+function closeTaskModal() {
+  document.getElementById("taskModal").classList.remove("open");
+  _taskEditId = null;
+}
+
+async function saveTask() {
+  const payload = {
+    task_key: document.getElementById("taskKeyInput").value.trim(),
+    title: document.getElementById("taskTitleInput").value.trim(),
+    description: document.getElementById("taskDescriptionInput").value.trim(),
+    button_text: document.getElementById("taskButtonTextInput").value.trim(),
+    task_kind: document.getElementById("taskKindInput").value,
+    target_url: document.getElementById("taskTargetUrlInput").value.trim(),
+    reward_points: parseInt(document.getElementById("taskRewardInput").value, 10),
+    daily_limit: parseInt(document.getElementById("taskDailyLimitInput").value, 10),
+    cooldown_seconds: parseInt(document.getElementById("taskCooldownInput").value, 10) || 0,
+    verify_seconds: parseInt(document.getElementById("taskVerifyInput").value, 10) || 0,
+    sort_order: parseInt(document.getElementById("taskSortOrderInput").value, 10) || 100,
+    is_active: document.getElementById("taskIsActiveInput").checked,
+  };
+
+  try {
+    if (_taskEditId) {
+      await api(`/api/tasks/${_taskEditId}`, { method: "PUT", body: JSON.stringify(payload) });
+      toast("Task updated");
+    } else {
+      await api("/api/tasks", { method: "POST", body: JSON.stringify(payload) });
+      toast("Task created");
+    }
+    closeTaskModal();
+    loadTasks();
+  } catch (e) {
+    toast("Error: " + e.message, "error");
+  }
+}
+
+// ──────────────────────────────────────────────
+// User detail modal
+// ──────────────────────────────────────────────
+async function openUserDetailModal(userId) {
+  document.getElementById("userDetailModal").classList.add("open");
+  document.getElementById("userDetailBody").innerHTML = '<div class="loading">Loading…</div>';
+  try {
+    const data = await api(`/api/users/${userId}/details`);
+    renderUserDetail(data);
+  } catch (e) {
+    document.getElementById("userDetailBody").innerHTML = `<div class="empty">Error: ${e.message}</div>`;
+  }
+}
+
+function closeUserDetailModal() {
+  document.getElementById("userDetailModal").classList.remove("open");
+}
+
+function renderUserDetail(data) {
+  const user = data.user || {};
+  const summary = data.summary || {};
+  const referredBy = data.referred_by_user;
+  document.getElementById("userDetailBody").innerHTML = `
+    <div class="summary-grid">
+      <div class="summary-card"><div class="label">Current Points</div><div class="value">${Number(user.points || 0).toLocaleString()}</div></div>
+      <div class="summary-card"><div class="label">Total Earned</div><div class="value">${Number(user.total_earned || 0).toLocaleString()}</div></div>
+      <div class="summary-card"><div class="label">Total Withdrawn</div><div class="value">${Number(user.total_withdrawn || 0).toLocaleString()}</div></div>
+      <div class="summary-card"><div class="label">Referrals</div><div class="value">${Number(summary.referral_count || 0).toLocaleString()}</div></div>
+      <div class="summary-card"><div class="label">Referral Points</div><div class="value">${Number(summary.referral_points || 0).toLocaleString()}</div></div>
+      <div class="summary-card"><div class="label">Tasks Completed</div><div class="value">${Number(summary.total_tasks_completed || 0).toLocaleString()}</div></div>
+      <div class="summary-card"><div class="label">Today Tasks</div><div class="value">${Number(summary.tasks_today || 0).toLocaleString()}</div></div>
+      <div class="summary-card"><div class="label">Today Points</div><div class="value">${Number(summary.points_today || 0).toLocaleString()}</div></div>
+      <div class="summary-card"><div class="label">Pending Withdrawals</div><div class="value">${Number(summary.pending_withdrawals || 0).toLocaleString()}</div></div>
+      <div class="summary-card"><div class="label">Rank</div><div class="value">${summary.rank || "—"}</div></div>
+    </div>
+    <div class="detail-grid">
+      <div>
+        <div class="detail-section">
+          <h4>Profile</h4>
+          <div class="detail-list">
+            <div class="detail-item"><span class="muted">User ID</span><strong>${user.user_id || "—"}</strong></div>
+            <div class="detail-item"><span class="muted">Name</span><strong>${escHtml(user.full_name || "—")}</strong></div>
+            <div class="detail-item"><span class="muted">Username</span><strong>${user.username ? "@" + escHtml(user.username) : "—"}</strong></div>
+            <div class="detail-item"><span class="muted">Joined</span><strong>${user.joined_at ? escHtml(user.joined_at) : "—"}</strong></div>
+            <div class="detail-item"><span class="muted">Status</span><strong>${user.is_banned === 1 ? "Banned" : "Active"}</strong></div>
+            <div class="detail-item"><span class="muted">Referred By</span><strong>${referredBy ? escHtml(referredBy.full_name || referredBy.username || String(referredBy.user_id)) : "—"}</strong></div>
+          </div>
+        </div>
+        <div class="detail-section">
+          <h4>Task Breakdown</h4>
+          <div class="detail-list">
+            ${renderDetailItems(data.task_breakdown, item => `${escHtml(item.task_title)}<span class="muted">${Number(item.completions).toLocaleString()} times, ${Number(item.points_earned).toLocaleString()} pts</span>`, "No task history.")}
+          </div>
+        </div>
+      </div>
+      <div>
+        <div class="detail-section">
+          <h4>Recent Referrals</h4>
+          <div class="detail-list">
+            ${renderDetailItems(data.recent_referrals, item => `${escHtml(item.full_name || item.username || String(item.referred_id))}<span class="muted">+${Number(item.points_awarded).toLocaleString()} pts</span>`, "No referrals yet.")}
+          </div>
+        </div>
+        <div class="detail-section">
+          <h4>Recent Withdrawals</h4>
+          <div class="detail-list">
+            ${renderDetailItems(data.recent_withdrawals, item => `#${item.id} ${Number(item.amount_bdt).toFixed(2)} BDT<span class="muted">${escHtml(item.status)} · ${escHtml(item.payment_method)}</span>`, "No withdrawals found.")}
+          </div>
+        </div>
+        <div class="detail-section">
+          <h4>Recent Tasks</h4>
+          <div class="detail-list">
+            ${renderDetailItems(data.recent_tasks, item => `${escHtml(item.task_title)}<span class="muted">+${Number(item.points_earned).toLocaleString()} pts · ${escHtml(item.completed_at || "")}</span>`, "No recent task activity.")}
+          </div>
+        </div>
+      </div>
+    </div>`;
+}
+
+function renderDetailItems(items, formatter, emptyText) {
+  if (!items || !items.length) {
+    return `<div class="detail-item"><span class="muted">${emptyText}</span><span></span></div>`;
+  }
+  return items.map(item => `<div class="detail-item"><span>${formatter(item)}</span></div>`).join("");
 }
 
 // ──────────────────────────────────────────────
@@ -670,6 +1034,9 @@ function confirmAction(action, id, msg) {
   else if (action === "reject_wd")  { btn.className = "btn btn-red";   btn.textContent = "Reject"; }
   else if (action === "ban")        { btn.className = "btn btn-red";   btn.textContent = "Ban"; }
   else if (action === "unban")      { btn.className = "btn btn-green"; btn.textContent = "Unban"; }
+  else if (action === "delete_user") { btn.className = "btn btn-red"; btn.textContent = "Delete"; }
+  else if (action === "toggle_task") { btn.className = "btn btn-yellow"; btn.textContent = "Change"; }
+  else if (action === "delete_task") { btn.className = "btn btn-red"; btn.textContent = "Delete"; }
   _modalCb = () => executeAction(action, id);
   document.getElementById("confirmModal").classList.add("open");
 }
@@ -680,8 +1047,9 @@ function closeModal() {
 }
 
 async function modalConfirm() {
+  const cb = _modalCb;
   closeModal();
-  if (_modalCb) await _modalCb();
+  if (cb) await cb();
 }
 
 async function executeAction(action, id) {
@@ -690,6 +1058,9 @@ async function executeAction(action, id) {
     if (action === "reject_wd")  { await api(`/api/withdrawals/${id}/reject`,  { method: "POST" }); toast("❌ Withdrawal rejected, points refunded"); fetchWithdrawals(); }
     if (action === "ban")        { await api(`/api/users/${id}/ban`,    { method: "POST" }); toast("🚫 User banned"); fetchUsers(); }
     if (action === "unban")      { await api(`/api/users/${id}/unban`,  { method: "POST" }); toast("✅ User unbanned"); fetchUsers(); }
+    if (action === "delete_user") { await api(`/api/users/${id}`, { method: "DELETE" }); toast("User deleted"); fetchUsers(); }
+    if (action === "toggle_task") { await api(`/api/tasks/${id}/toggle`, { method: "POST" }); toast("Task status updated"); loadTasks(); }
+    if (action === "delete_task") { await api(`/api/tasks/${id}`, { method: "DELETE" }); toast("Task deleted"); loadTasks(); }
   } catch(e) {
     toast("Error: " + e.message, "error");
   }
@@ -713,9 +1084,10 @@ function closePointsModal() {
 async function confirmAddPoints() {
   const pts = parseInt(document.getElementById("pointsInput").value, 10);
   if (!pts || isNaN(pts)) { toast("Enter a valid number", "error"); return; }
+  const userId = _pointsUserId;
   closePointsModal();
   try {
-    await api(`/api/users/${_pointsUserId}/add_points`, { method: "POST", body: JSON.stringify({ points: pts }) });
+    await api(`/api/users/${userId}/add_points`, { method: "POST", body: JSON.stringify({ points: pts }) });
     toast(pts > 0 ? `✅ +${pts} points added` : `✅ ${pts} points deducted`);
     fetchUsers();
   } catch(e) {
@@ -730,9 +1102,15 @@ function escHtml(s) {
   return String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");
 }
 
+function escJs(s) {
+  return String(s).replace(/\\/g, "\\\\").replace(/'/g, "\\'");
+}
+
 // Close modals on backdrop click
 document.getElementById("confirmModal").addEventListener("click", e => { if(e.target === e.currentTarget) closeModal(); });
 document.getElementById("pointsModal").addEventListener("click",  e => { if(e.target === e.currentTarget) closePointsModal(); });
+document.getElementById("taskModal").addEventListener("click", e => { if(e.target === e.currentTarget) closeTaskModal(); });
+document.getElementById("userDetailModal").addEventListener("click", e => { if(e.target === e.currentTarget) closeUserDetailModal(); });
 
 // ──────────────────────────────────────────────
 // Auto-login from sessionStorage

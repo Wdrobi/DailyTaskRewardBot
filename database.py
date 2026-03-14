@@ -598,11 +598,242 @@ class Database:
                     row = await cur.fetchone()
                     return row[0] if row else 0
 
-    async def admin_add_points(self, user_id: int, points: int) -> bool:
+    async def get_all_tasks(self, include_inactive: bool = True) -> list[dict]:
+        async with aiosqlite.connect(self.db_path) as db:
+            db.row_factory = aiosqlite.Row
+            base_query = (
+                "SELECT t.*, "
+                "COALESCE((SELECT COUNT(*) FROM task_completions tc WHERE tc.task_type = t.task_key), 0) AS total_completions, "
+                "COALESCE((SELECT COUNT(*) FROM task_completions tc WHERE tc.task_type = t.task_key AND DATE(tc.completed_at) = DATE('now')), 0) AS today_completions "
+                "FROM tasks t"
+            )
+            if include_inactive:
+                query = base_query + " ORDER BY t.sort_order ASC, t.id ASC"
+                params = ()
+            else:
+                query = base_query + " WHERE t.is_active = 1 ORDER BY t.sort_order ASC, t.id ASC"
+                params = ()
+            async with db.execute(query, params) as cur:
+                return [dict(row) for row in await cur.fetchall()]
+
+    async def get_task_admin_by_id(self, task_id: int) -> Optional[dict]:
+        async with aiosqlite.connect(self.db_path) as db:
+            db.row_factory = aiosqlite.Row
+            async with db.execute(
+                "SELECT * FROM tasks WHERE id = ?",
+                (task_id,),
+            ) as cur:
+                row = await cur.fetchone()
+                return dict(row) if row else None
+
+    async def create_task_admin(self, task_data: dict) -> int:
+        async with aiosqlite.connect(self.db_path) as db:
+            async with db.execute(
+                "INSERT INTO tasks ("
+                "task_key, title, description, button_text, task_kind, target_url, reward_points, "
+                "daily_limit, cooldown_seconds, verify_seconds, is_active, sort_order"
+                ") VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                (
+                    task_data["task_key"],
+                    task_data["title"],
+                    task_data["description"],
+                    task_data["button_text"],
+                    task_data["task_kind"],
+                    task_data["target_url"],
+                    task_data["reward_points"],
+                    task_data["daily_limit"],
+                    task_data["cooldown_seconds"],
+                    task_data["verify_seconds"],
+                    task_data["is_active"],
+                    task_data["sort_order"],
+                ),
+            ) as cur:
+                task_id = cur.lastrowid
+            await db.commit()
+            return task_id
+
+    async def update_task_admin(self, task_id: int, task_data: dict) -> bool:
         async with aiosqlite.connect(self.db_path) as db:
             await db.execute(
+                "UPDATE tasks SET "
+                "task_key = ?, title = ?, description = ?, button_text = ?, task_kind = ?, target_url = ?, "
+                "reward_points = ?, daily_limit = ?, cooldown_seconds = ?, verify_seconds = ?, "
+                "is_active = ?, sort_order = ? "
+                "WHERE id = ?",
+                (
+                    task_data["task_key"],
+                    task_data["title"],
+                    task_data["description"],
+                    task_data["button_text"],
+                    task_data["task_kind"],
+                    task_data["target_url"],
+                    task_data["reward_points"],
+                    task_data["daily_limit"],
+                    task_data["cooldown_seconds"],
+                    task_data["verify_seconds"],
+                    task_data["is_active"],
+                    task_data["sort_order"],
+                    task_id,
+                ),
+            )
+            await db.commit()
+            return db.total_changes > 0
+
+    async def set_task_active_admin(self, task_id: int, is_active: bool) -> bool:
+        async with aiosqlite.connect(self.db_path) as db:
+            await db.execute(
+                "UPDATE tasks SET is_active = ? WHERE id = ?",
+                (1 if is_active else 0, task_id),
+            )
+            await db.commit()
+            return db.total_changes > 0
+
+    async def delete_task_admin(self, task_id: int) -> bool:
+        async with aiosqlite.connect(self.db_path) as db:
+            await db.execute("DELETE FROM tasks WHERE id = ?", (task_id,))
+            await db.commit()
+            return db.total_changes > 0
+
+    async def get_user_admin_details(self, user_id: int) -> Optional[dict]:
+        async with aiosqlite.connect(self.db_path) as db:
+            db.row_factory = aiosqlite.Row
+
+            async with db.execute("SELECT * FROM users WHERE user_id = ?", (user_id,)) as cur:
+                user_row = await cur.fetchone()
+                if not user_row:
+                    return None
+                user = dict(user_row)
+
+            referred_by_user = None
+            if user.get("referred_by"):
+                async with db.execute(
+                    "SELECT user_id, username, full_name FROM users WHERE user_id = ?",
+                    (user["referred_by"],),
+                ) as cur:
+                    ref_row = await cur.fetchone()
+                    referred_by_user = dict(ref_row) if ref_row else None
+
+            async with db.execute(
+                "SELECT COUNT(*), COALESCE(SUM(points_earned), 0) "
+                "FROM task_completions WHERE user_id = ?",
+                (user_id,),
+            ) as cur:
+                total_tasks_row = await cur.fetchone()
+
+            async with db.execute(
+                "SELECT COUNT(*), COALESCE(SUM(points_earned), 0) "
+                "FROM task_completions WHERE user_id = ? AND DATE(completed_at) = DATE('now')",
+                (user_id,),
+            ) as cur:
+                today_tasks_row = await cur.fetchone()
+
+            async with db.execute(
+                "SELECT COUNT(*), COALESCE(SUM(points_awarded), 0) "
+                "FROM referrals WHERE referrer_id = ?",
+                (user_id,),
+            ) as cur:
+                referral_row = await cur.fetchone()
+
+            async with db.execute(
+                "SELECT COUNT(*), COALESCE(SUM(points), 0) "
+                "FROM withdrawals WHERE user_id = ? AND status = 'pending'",
+                (user_id,),
+            ) as cur:
+                pending_withdrawal_row = await cur.fetchone()
+
+            async with db.execute(
+                "SELECT tc.task_type, COALESCE(t.title, tc.task_type) AS task_title, "
+                "COUNT(*) AS completions, COALESCE(SUM(tc.points_earned), 0) AS points_earned "
+                "FROM task_completions tc "
+                "LEFT JOIN tasks t ON t.task_key = tc.task_type "
+                "WHERE tc.user_id = ? "
+                "GROUP BY tc.task_type, task_title "
+                "ORDER BY completions DESC, points_earned DESC LIMIT 10",
+                (user_id,),
+            ) as cur:
+                task_breakdown = [dict(row) for row in await cur.fetchall()]
+
+            async with db.execute(
+                "SELECT tc.id, tc.task_type, COALESCE(t.title, tc.task_type) AS task_title, "
+                "tc.points_earned, tc.completed_at "
+                "FROM task_completions tc "
+                "LEFT JOIN tasks t ON t.task_key = tc.task_type "
+                "WHERE tc.user_id = ? "
+                "ORDER BY tc.completed_at DESC LIMIT 10",
+                (user_id,),
+            ) as cur:
+                recent_tasks = [dict(row) for row in await cur.fetchall()]
+
+            async with db.execute(
+                "SELECT id, points, amount_bdt, payment_method, payment_number, status, requested_at, processed_at "
+                "FROM withdrawals WHERE user_id = ? ORDER BY requested_at DESC LIMIT 10",
+                (user_id,),
+            ) as cur:
+                recent_withdrawals = [dict(row) for row in await cur.fetchall()]
+
+            async with db.execute(
+                "SELECT r.referred_id, r.points_awarded, r.created_at, u.full_name, u.username "
+                "FROM referrals r "
+                "LEFT JOIN users u ON u.user_id = r.referred_id "
+                "WHERE r.referrer_id = ? "
+                "ORDER BY r.created_at DESC LIMIT 10",
+                (user_id,),
+            ) as cur:
+                recent_referrals = [dict(row) for row in await cur.fetchall()]
+
+        rank = await self.get_user_rank(user_id)
+
+        return {
+            "user": user,
+            "summary": {
+                "rank": rank,
+                "total_tasks_completed": total_tasks_row[0] if total_tasks_row else 0,
+                "task_points_earned": total_tasks_row[1] if total_tasks_row else 0,
+                "tasks_today": today_tasks_row[0] if today_tasks_row else 0,
+                "points_today": today_tasks_row[1] if today_tasks_row else 0,
+                "referral_count": referral_row[0] if referral_row else 0,
+                "referral_points": referral_row[1] if referral_row else 0,
+                "pending_withdrawals": pending_withdrawal_row[0] if pending_withdrawal_row else 0,
+                "pending_withdrawal_points": pending_withdrawal_row[1] if pending_withdrawal_row else 0,
+            },
+            "referred_by_user": referred_by_user,
+            "task_breakdown": task_breakdown,
+            "recent_tasks": recent_tasks,
+            "recent_withdrawals": recent_withdrawals,
+            "recent_referrals": recent_referrals,
+        }
+
+    async def delete_user_admin(self, user_id: int) -> bool:
+        async with aiosqlite.connect(self.db_path) as db:
+            await db.execute("UPDATE users SET referred_by = NULL WHERE referred_by = ?", (user_id,))
+            await db.execute("DELETE FROM task_completions WHERE user_id = ?", (user_id,))
+            await db.execute("DELETE FROM withdrawals WHERE user_id = ?", (user_id,))
+            await db.execute(
+                "DELETE FROM referrals WHERE referrer_id = ? OR referred_id = ?",
+                (user_id, user_id),
+            )
+            await db.execute("DELETE FROM users WHERE user_id = ?", (user_id,))
+            await db.commit()
+            return db.total_changes > 0
+
+    async def admin_add_points(self, user_id: int, points: int) -> bool:
+        async with aiosqlite.connect(self.db_path) as db:
+            async with db.execute(
+                "SELECT points FROM users WHERE user_id = ?",
+                (user_id,),
+            ) as cur:
+                row = await cur.fetchone()
+                if not row:
+                    return False
+                current_points = row[0]
+
+            if points < 0 and current_points < abs(points):
+                return False
+
+            earned_delta = points if points > 0 else 0
+            await db.execute(
                 "UPDATE users SET points = points + ?, total_earned = total_earned + ? WHERE user_id = ?",
-                (points, points, user_id),
+                (points, earned_delta, user_id),
             )
             await db.commit()
             return db.total_changes > 0

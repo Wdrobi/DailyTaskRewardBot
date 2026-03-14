@@ -73,7 +73,6 @@ const currency = new Intl.NumberFormat("en-BD", {
 
 const screens = [...document.querySelectorAll(".screen")];
 const navItems = [...document.querySelectorAll(".nav-item")];
-let currentMainButtonAction = "tasks";
 
 function formatMoney(value) {
   return `${currency.format(value)} BDT`;
@@ -240,24 +239,13 @@ function activateScreen(screenName) {
   });
 
   if (tg) {
-    const mainButtonMap = {
-      home: ["Open Tasks", "tasks"],
-      tasks: ["Start Earning", "watch-ad"],
-      referral: ["Share Referral", "share-referral"],
-      wallet: ["Request Withdraw", "withdraw"],
-      support: ["Watch Tutorial", "tutorial"],
-    };
-    const [text, action] = mainButtonMap[screenName] || ["Open Tasks", "tasks"];
-    currentMainButtonAction = action;
-    tg.MainButton.setText(text);
-    tg.MainButton.show();
     tg.MainButton.offClick(handleMainButton);
-    tg.MainButton.onClick(handleMainButton);
+    tg.MainButton.hide();
   }
 }
 
 function handleMainButton() {
-  handleAction(currentMainButtonAction);
+  tg?.MainButton.hide();
 }
 
 function handleAction(action, explicitTarget) {
@@ -369,6 +357,7 @@ function initTelegram() {
   tg.expand();
   tg.setHeaderColor("#3a1428");
   tg.setBackgroundColor("#181624");
+  tg.MainButton.hide();
 }
 
 render();

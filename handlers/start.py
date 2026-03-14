@@ -18,7 +18,7 @@ from config import (
     WITHDRAWAL_ENABLED,
 )
 from database import Database
-from keyboards.menus import dashboard_action_keyboard, force_join_keyboard, main_menu, task_menu
+from keyboards.menus import dashboard_action_keyboard, force_join_keyboard, task_menu
 from utils.access import can_access_bot, channel_button_url, channel_label, format_channel_lines
 
 logger = logging.getLogger(__name__)
@@ -171,44 +171,27 @@ async def _build_mini_app_url(db: Database, user_id: int) -> str:
     return _build_url_with_query(MINI_APP_URL, query)
 
 
+def _dashboard_text(full_name: str) -> str:
+    return (
+        f"✅ <b>স্বাগতম {full_name}</b> 🌟\n\n"
+        "নিচের <b>ইনকাম শুরু করুন</b> বাটনে চাপুন। Mini App খুলে টাস্ক করুন এবং আয় শুরু করুন।\n\n"
+        "👉 <b>ইনকাম শুরু করুন</b> বাটনে চাপুন।\n\n"
+        "বোঝার সুবিধার জন্য 🎥 টিউটোরিয়াল ভিডিও-ও দেখে নিন।"
+    )
+
+
 async def _send_dashboard(message: Message, db: Database) -> None:
     user = await db.get_user(message.from_user.id)
     if not user:
         await message.answer("❌ ইউজার ডেটা পাওয়া যায়নি। আবার /start দিন।")
         return
 
-    ref_count = await db.get_referral_count(message.from_user.id)
-    today = await db.get_user_today_summary(message.from_user.id)
-    rank = await db.get_user_rank(message.from_user.id)
-    withdrawable = user["points"] // POINTS_PER_TAKA
-    rank_text = f"#{rank}" if rank else "N/A"
-    withdrawal_line = (
-        f"৳{withdrawable:.0f}"
-        if WITHDRAWAL_ENABLED
-        else "Coming Soon"
-    )
-    cta_line = (
-        "নিচের বাটন থেকে Mini App খুলুন বা quick action নিন।"
-        if MINI_APP_URL
-        else "নিচের quick action বাটন বা menu ব্যবহার করুন।"
-    )
     mini_app_url = await _build_mini_app_url(db, message.from_user.id)
 
     await message.answer(
-        f"🏠 <b>মেইন ড্যাশবোর্ড</b>\n\n"
-        f"👤 <b>{user['full_name']}</b>\n"
-        f"🆔 <code>{user['user_id']}</code>\n\n"
-        f"💰 বর্তমান পয়েন্ট: <b>{user['points']}</b>\n"
-        f"📈 মোট আয়: <b>{user['total_earned']}</b> পয়েন্ট\n"
-        f"📅 আজকের আয়: <b>{today['points_earned']}</b> পয়েন্ট\n"
-        f"✅ আজকের টাস্ক: <b>{today['tasks_completed']}</b>\n"
-        f"👥 রেফারেল: <b>{ref_count}</b>\n"
-        f"🏆 র‌্যাঙ্ক: <b>{rank_text}</b>\n"
-        f"💵 উত্তোলনযোগ্য: <b>{withdrawal_line}</b>\n\n"
-        f"{cta_line}",
+        _dashboard_text(user["full_name"]),
         reply_markup=dashboard_action_keyboard(mini_app_url, TUTORIAL_VIDEO_URL),
     )
-    await message.answer("📋 Quick Menu", reply_markup=main_menu())
 
 
 async def _send_dashboard_to_chat(bot: Bot, db: Database, chat_id: int, user_id: int) -> None:
@@ -217,35 +200,13 @@ async def _send_dashboard_to_chat(bot: Bot, db: Database, chat_id: int, user_id:
         await bot.send_message(chat_id, "❌ ইউজার ডেটা পাওয়া যায়নি। আবার /start দিন।")
         return
 
-    ref_count = await db.get_referral_count(user_id)
-    today = await db.get_user_today_summary(user_id)
-    rank = await db.get_user_rank(user_id)
-    withdrawable = user["points"] // POINTS_PER_TAKA
-    rank_text = f"#{rank}" if rank else "N/A"
-    withdrawal_line = f"৳{withdrawable:.0f}" if WITHDRAWAL_ENABLED else "Coming Soon"
-    cta_line = (
-        "নিচের বাটন থেকে Mini App খুলুন বা quick action নিন।"
-        if MINI_APP_URL
-        else "নিচের quick action বাটন বা menu ব্যবহার করুন।"
-    )
     mini_app_url = await _build_mini_app_url(db, user_id)
 
     await bot.send_message(
         chat_id,
-        f"🏠 <b>মেইন ড্যাশবোর্ড</b>\n\n"
-        f"👤 <b>{user['full_name']}</b>\n"
-        f"🆔 <code>{user['user_id']}</code>\n\n"
-        f"💰 বর্তমান পয়েন্ট: <b>{user['points']}</b>\n"
-        f"📈 মোট আয়: <b>{user['total_earned']}</b> পয়েন্ট\n"
-        f"📅 আজকের আয়: <b>{today['points_earned']}</b> পয়েন্ট\n"
-        f"✅ আজকের টাস্ক: <b>{today['tasks_completed']}</b>\n"
-        f"👥 রেফারেল: <b>{ref_count}</b>\n"
-        f"🏆 র‌্যাঙ্ক: <b>{rank_text}</b>\n"
-        f"💵 উত্তোলনযোগ্য: <b>{withdrawal_line}</b>\n\n"
-        f"{cta_line}",
+        _dashboard_text(user["full_name"]),
         reply_markup=dashboard_action_keyboard(mini_app_url, TUTORIAL_VIDEO_URL),
     )
-    await bot.send_message(chat_id, "📋 Quick Menu", reply_markup=main_menu())
 
 
 async def _ensure_message_access(message: Message, bot: Bot) -> bool:
@@ -467,8 +428,7 @@ async def nav_tasks(callback: CallbackQuery, db: Database, bot: Bot) -> None:
 
 @router.callback_query(F.data == "nav:wallet")
 async def nav_wallet(callback: CallbackQuery) -> None:
-    await callback.message.answer("💰 নিচের Quick Menu থেকে 'আমার ওয়ালেট' বেছে নিন।", reply_markup=main_menu())
-    await callback.answer()
+    await callback.answer("💰 Wallet দেখতে Mini App ব্যবহার করুন।", show_alert=True)
 
 
 @router.callback_query(F.data == "nav:referral")

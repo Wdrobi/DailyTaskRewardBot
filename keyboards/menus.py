@@ -54,14 +54,6 @@ def dashboard_action_keyboard(
     builder.row(
         InlineKeyboardButton(text="🎥 টিউটোরিয়াল ভিডিও", url=tutorial_url)
     )
-    builder.row(
-        InlineKeyboardButton(text="🏆 Leaderboard", callback_data="nav:leaderboard"),
-        InlineKeyboardButton(text="👥 Invite & Earn", callback_data="nav:referral"),
-    )
-    builder.row(
-        InlineKeyboardButton(text="✅ Tasks", callback_data="nav:tasks"),
-        InlineKeyboardButton(text="💰 Wallet", callback_data="nav:wallet"),
-    )
     return builder.as_markup()
 
 

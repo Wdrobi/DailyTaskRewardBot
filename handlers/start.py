@@ -12,12 +12,16 @@ from config import (
     REFERRAL_REWARD,
     BOT_USERNAME,
     MINI_APP_URL,
+    MIN_ACTIVE_REFERRALS,
+    MIN_WITHDRAWAL_BDT,
     MIN_WITHDRAWAL_POINTS,
+    TASK_REWARDS,
     POINTS_PER_TAKA,
     TUTORIAL_VIDEO_URL,
     WITHDRAWAL_ENABLED,
 )
 from database import Database
+from handlers.wallet import send_wallet_overview
 from keyboards.menus import dashboard_action_keyboard, force_join_keyboard, task_menu
 from utils.access import can_access_bot, channel_button_url, channel_label, format_channel_lines
 
@@ -167,6 +171,8 @@ async def _build_mini_app_url(db: Database, user_id: int) -> str:
         "referralUsers": json.dumps(referral_payload, ensure_ascii=False, separators=(",", ":")),
         "withdrawals": json.dumps(withdrawal_payload, ensure_ascii=False, separators=(",", ":")),
         "withdrawEnabled": "1" if WITHDRAWAL_ENABLED else "0",
+        "minWithdrawBdt": str(MIN_WITHDRAWAL_BDT),
+        "minActiveReferrals": str(MIN_ACTIVE_REFERRALS),
     }
     return _build_url_with_query(MINI_APP_URL, query)
 
@@ -230,6 +236,7 @@ async def cmd_start(message: Message, db: Database, state: FSMContext, bot: Bot)
 
     # রেফারেল আর্গুমেন্ট পার্স করুন  e.g. /start ref_123456
     referred_by: int | None = None
+    open_wallet = False
     args = message.text.split(maxsplit=1)
     if len(args) > 1 and args[1].startswith("ref_"):
         try:
@@ -238,6 +245,8 @@ async def cmd_start(message: Message, db: Database, state: FSMContext, bot: Bot)
                 referred_by = ref_id
         except ValueError:
             pass
+    elif len(args) > 1 and args[1] == "wallet":
+        open_wallet = True
 
     is_new = await db.register_user(
         user_id=from_user.id,
@@ -267,6 +276,9 @@ async def cmd_start(message: Message, db: Database, state: FSMContext, bot: Bot)
         return
 
     await _process_referral_bonus(bot, db, from_user.id, from_user.full_name)
+    if open_wallet:
+        await send_wallet_overview(message, db, state, bot)
+        return
     await _send_dashboard(message, db)
 
 
@@ -323,6 +335,7 @@ async def my_profile(message: Message, db: Database, bot: Bot) -> None:
         f"🏦 মোট উত্তোলন: <b>{user['total_withdrawn']}</b> পয়েন্ট\n"
         f"👥 সফল রেফারেল: <b>{ref_count}</b> জন\n\n"
         f"💵 উত্তোলনযোগ্য: <b>৳{withdrawable:.0f}</b>\n"
+        f"📌 Withdrawal requirement: <b>৳{MIN_WITHDRAWAL_BDT}</b> + <b>{MIN_ACTIVE_REFERRALS} active referrals</b>\n"
         f"📅 যোগদান: {user['joined_at'][:10]}",
     )
 
@@ -383,8 +396,9 @@ async def help_cmd(message: Message, bot: Bot) -> None:
         return
 
     withdrawal_help = (
-        f"  ন্যূনতম {MIN_WITHDRAWAL_POINTS} পয়েন্ট হলে বিকাশ/নগদে টাকা পাবেন\n"
-        f"  ১০০ পয়েন্ট = ১ টাকা\n\n"
+        f"  ন্যূনতম ৳{MIN_WITHDRAWAL_BDT} ({MIN_WITHDRAWAL_POINTS} পয়েন্ট) হলে বিকাশ/নগদে টাকা পাবেন\n"
+        f"  কমপক্ষে {MIN_ACTIVE_REFERRALS}টি active referral লাগবে\n"
+        f"  {POINTS_PER_TAKA} পয়েন্ট = ১ টাকা\n\n"
         if WITHDRAWAL_ENABLED
         else "  পেমেন্ট/উত্তোলন ফিচার এখনো চালু হয়নি\n"
              "  পরে আপডেট দিয়ে চালু করা হবে\n\n"
@@ -393,11 +407,11 @@ async def help_cmd(message: Message, bot: Bot) -> None:
     await message.answer(
         "ℹ️ <b>সাহায্য ও নির্দেশিকা</b>\n\n"
         "<b>টাস্ক করুন:</b>\n"
-        "  📺 অ্যাড দেখুন → ৫ পয়েন্ট (দিনে সর্বোচ্চ ৫ বার)\n"
-        "  🌐 সাইট ভিজিট → ৩ পয়েন্ট (দিনে সর্বোচ্চ ৩ বার)\n"
-        "  📅 দৈনিক চেক-ইন → ২ পয়েন্ট (দিনে ১ বার)\n\n"
+        f"  📺 অ্যাড দেখুন → {TASK_REWARDS['watch_ad']} পয়েন্ট (দিনে সর্বোচ্চ ৩০ বার)\n"
+        f"  🌐 সাইট ভিজিট → {TASK_REWARDS['visit_site']} পয়েন্ট (দিনে সর্বোচ্চ ১৫ বার)\n"
+        f"  📅 দৈনিক চেক-ইন → {TASK_REWARDS['daily_checkin']} পয়েন্ট (দিনে ১ বার)\n\n"
         "<b>রেফারেল:</b>\n"
-        "  বন্ধুকে রেফার করুন → +২০ পয়েন্ট\n\n"
+        f"  বন্ধুকে রেফার করুন → +{REFERRAL_REWARD} পয়েন্ট\n\n"
         "<b>উত্তোলন:</b>\n"
         f"{withdrawal_help}"
         "❓ সমস্যা হলে অ্যাডমিনকে মেসেজ করুন।",

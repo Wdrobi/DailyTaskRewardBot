@@ -6,6 +6,8 @@ from aiogram.types import Message, CallbackQuery
 
 from config import (
     ADMIN_IDS,
+    MIN_ACTIVE_REFERRALS,
+    MIN_WITHDRAWAL_BDT,
     MIN_WITHDRAWAL_POINTS,
     POINTS_PER_TAKA,
     WITHDRAWAL_ENABLED,
@@ -29,11 +31,19 @@ STATUS_LABELS = {
 }
 
 
-# ──────────────────────────────────────────────
-# ওয়ালেট দেখুন
-# ──────────────────────────────────────────────
-@router.message(F.text == "💰 আমার ওয়ালেট")
-async def show_wallet(message: Message, db: Database, state: FSMContext, bot: Bot) -> None:
+async def _get_withdrawal_requirements(db: Database, user_id: int, points: int) -> tuple[int, bool, int, int]:
+    active_referrals = await db.get_referral_count(user_id)
+    missing_points = max(MIN_WITHDRAWAL_POINTS - points, 0)
+    missing_referrals = max(MIN_ACTIVE_REFERRALS - active_referrals, 0)
+    can_withdraw = (
+        WITHDRAWAL_ENABLED
+        and points >= MIN_WITHDRAWAL_POINTS
+        and active_referrals >= MIN_ACTIVE_REFERRALS
+    )
+    return active_referrals, can_withdraw, missing_points, missing_referrals
+
+
+async def send_wallet_overview(message: Message, db: Database, state: FSMContext, bot: Bot) -> None:
     await state.clear()
     has_access, _, had_error = await can_access_bot(bot, message.from_user.id)
     if had_error:
@@ -50,7 +60,9 @@ async def show_wallet(message: Message, db: Database, state: FSMContext, bot: Bo
 
     points = user["points"]
     withdrawable_taka = points / POINTS_PER_TAKA
-    can_withdraw = points >= MIN_WITHDRAWAL_POINTS
+    active_referrals, can_withdraw, missing_points, missing_referrals = await _get_withdrawal_requirements(
+        db, message.from_user.id, points
+    )
 
     history = await db.get_user_withdrawals(message.from_user.id)
     history_text = ""
@@ -67,8 +79,10 @@ async def show_wallet(message: Message, db: Database, state: FSMContext, bot: Bo
         f"💰 <b>আমার ওয়ালেট</b>\n\n"
         f"🔵 বর্তমান পয়েন্ট: <b>{points}</b>\n"
         f"💵 উত্তোলনযোগ্য: <b>৳{withdrawable_taka:.2f}</b>\n"
+        f"👥 সক্রিয় রেফারেল: <b>{active_referrals}/{MIN_ACTIVE_REFERRALS}</b>\n"
         f"📊 মোট অর্জন: <b>{user['total_earned']}</b>\n"
-        f"🏦 মোট উত্তোলন: <b>{user['total_withdrawn']}</b> পয়েন্ট"
+        f"🏦 মোট উত্তোলন: <b>{user['total_withdrawn']}</b> পয়েন্ট\n\n"
+        f"📌 উত্তোলন শর্ত: <b>কমপক্ষে ৳{MIN_WITHDRAWAL_BDT}</b> এবং <b>{MIN_ACTIVE_REFERRALS}টি সক্রিয় রেফারেল</b>"
         f"{history_text}"
     )
 
@@ -88,10 +102,22 @@ async def show_wallet(message: Message, db: Database, state: FSMContext, bot: Bo
               "পেমেন্ট ইন্টিগ্রেশন শেষ হলে উত্তোলন অপশন চালু হবে।"
         )
     else:
-        needed = MIN_WITHDRAWAL_POINTS - points
+        reasons: list[str] = []
+        if missing_points > 0:
+            reasons.append(f"আরও <b>{missing_points}</b> পয়েন্ট (৳{missing_points / POINTS_PER_TAKA:.2f}) দরকার")
+        if missing_referrals > 0:
+            reasons.append(f"আরও <b>{missing_referrals}</b>টি সক্রিয় রেফারেল দরকার")
         await message.answer(
-            text + f"\n\n⚠️ উত্তোলনের জন্য আরও <b>{needed}</b> পয়েন্ট দরকার।"
+            text + "\n\n⚠️ উত্তোলনের জন্য " + " এবং ".join(reasons) + "."
         )
+
+
+# ──────────────────────────────────────────────
+# ওয়ালেট দেখুন
+# ──────────────────────────────────────────────
+@router.message(F.text == "💰 আমার ওয়ালেট")
+async def show_wallet(message: Message, db: Database, state: FSMContext, bot: Bot) -> None:
+    await send_wallet_overview(message, db, state, bot)
 
 
 # ──────────────────────────────────────────────
@@ -122,11 +148,16 @@ async def start_withdrawal(callback: CallbackQuery, db: Database, state: FSMCont
         await callback.answer("🚫 অ্যাকাউন্ট নিষিদ্ধ।", show_alert=True)
         return
 
-    if user["points"] < MIN_WITHDRAWAL_POINTS:
-        await callback.answer(
-            f"❌ ন্যূনতম {MIN_WITHDRAWAL_POINTS} পয়েন্ট না হলে উত্তোলন করা যাবে না।",
-            show_alert=True,
-        )
+    active_referrals, can_withdraw, missing_points, missing_referrals = await _get_withdrawal_requirements(
+        db, user_id, user["points"]
+    )
+    if not can_withdraw:
+        messages: list[str] = []
+        if missing_points > 0:
+            messages.append(f"ন্যূনতম ৳{MIN_WITHDRAWAL_BDT} ({MIN_WITHDRAWAL_POINTS} পয়েন্ট) লাগবে")
+        if missing_referrals > 0:
+            messages.append(f"{MIN_ACTIVE_REFERRALS}টি সক্রিয় রেফারেল লাগবে, আপনার আছে {active_referrals}")
+        await callback.answer("❌ " + " | ".join(messages), show_alert=True)
         return
 
     if await db.has_pending_withdrawal(user_id):
@@ -137,12 +168,14 @@ async def start_withdrawal(callback: CallbackQuery, db: Database, state: FSMCont
         return
 
     await state.set_state(WithdrawalStates.selecting_method)
-    await state.update_data(points=user["points"])
+    await state.update_data(points=user["points"], active_referrals=active_referrals)
 
     await callback.message.edit_text(
         f"💸 <b>টাকা উত্তোলন</b>\n\n"
         f"আপনার পয়েন্ট: <b>{user['points']}</b>\n"
         f"উত্তোলনযোগ্য: <b>৳{user['points'] / POINTS_PER_TAKA:.2f}</b>\n\n"
+        f"সক্রিয় রেফারেল: <b>{active_referrals}/{MIN_ACTIVE_REFERRALS}</b>\n"
+        f"ন্যূনতম শর্ত: <b>৳{MIN_WITHDRAWAL_BDT}</b> + <b>{MIN_ACTIVE_REFERRALS}টি সক্রিয় রেফারেল</b>\n\n"
         f"পেমেন্ট মাধ্যম বেছে নিন:",
         reply_markup=withdrawal_methods_keyboard(),
     )
@@ -234,6 +267,30 @@ async def confirm_withdrawal(
     method = data["method"]
     number = data["account_number"]
 
+    user = await db.get_user(user_id)
+    if not user or user.get("is_banned"):
+        await state.clear()
+        await callback.answer("🚫 অ্যাকাউন্ট নিষিদ্ধ বা পাওয়া যায়নি।", show_alert=True)
+        return
+
+    active_referrals, can_withdraw, _, _ = await _get_withdrawal_requirements(
+        db, user_id, user["points"]
+    )
+    if not can_withdraw:
+        await state.clear()
+        await callback.answer(
+            f"❌ উত্তোলনের শর্ত পূরণ হয়নি। ৳{MIN_WITHDRAWAL_BDT} এবং {MIN_ACTIVE_REFERRALS}টি সক্রিয় রেফারেল লাগবে।",
+            show_alert=True,
+        )
+        return
+
+    if await db.has_pending_withdrawal(user_id):
+        await state.clear()
+        await callback.answer("⏳ আপনার একটি উত্তোলন আবেদন ইতিমধ্যে প্রক্রিয়াধীন আছে।", show_alert=True)
+        return
+
+    points = user["points"]
+
     # পয়েন্ট কাটুন (এখনই কাটা হয়; প্রত্যাখ্যাত হলে ফেরত দেওয়া হবে)
     success = await db.deduct_points(user_id, points)
     if not success:
@@ -265,7 +322,6 @@ async def confirm_withdrawal(
     await callback.answer("✅ আবেদন সফলভাবে জমা হয়েছে!")
 
     # অ্যাডমিনকে নোটিফিকেশন পাঠান
-    user = await db.get_user(user_id)
     name = user["full_name"] if user else "অজানা"
     username = f"@{user['username']}" if user and user.get("username") else "নেই"
 
@@ -278,7 +334,8 @@ async def confirm_withdrawal(
                 f"🆔 আইডি: <code>{user_id}</code>\n"
                 f"📋 আবেদন নং: <code>#{withdrawal_id}</code>\n"
                 f"💵 পরিমাণ: ৳{amount_taka:.2f} ({points} পয়েন্ট)\n"
-                f"📱 {label}: {number}",
+                f"📱 {label}: {number}\n"
+                f"👥 সক্রিয় রেফারেল: {active_referrals}",
                 reply_markup=admin_withdrawal_keyboard(withdrawal_id),
             )
         except Exception as e:

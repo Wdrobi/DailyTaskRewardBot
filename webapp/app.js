@@ -41,6 +41,8 @@ const state = {
   referralUsers: getJson("referralUsers", []),
   withdrawals: getJson("withdrawals", []),
   withdrawEnabled: getParam("withdrawEnabled", "0") === "1",
+  minWithdrawBdt: getNumber("minWithdrawBdt", 500),
+  minActiveReferrals: getNumber("minActiveReferrals", 10),
 };
 
 const els = {
@@ -174,7 +176,7 @@ function renderTasks() {
       taskKey: "watch_ad",
       title: "Watch Ads",
       description: "Earn by watching ads",
-      reward: 3.00,
+      reward: 4.00,
       buttonText: "Watch Ad",
       remaining: Math.max(DAILY_AD_LIMIT - state.adsToday, 0),
       dailyLimit: DAILY_AD_LIMIT,
@@ -186,7 +188,7 @@ function renderTasks() {
       taskKey: "visit_site",
       title: "Website Visit",
       description: "Visit the sponsor website and stay for a few seconds",
-      reward: 4.00,
+      reward: 5.00,
       buttonText: "Visit Website",
       remaining: 15,
       dailyLimit: 15,
@@ -198,7 +200,7 @@ function renderTasks() {
       taskKey: "daily_checkin",
       title: "Daily Check-In",
       description: "Claim your instant daily bonus once per day",
-      reward: 2.00,
+      reward: 3.00,
       buttonText: "Claim Bonus",
       remaining: 1,
       dailyLimit: 1,
@@ -268,9 +270,11 @@ function renderReferralUsers() {
 }
 
 function renderWithdrawals() {
-  els.withdrawButton.disabled = !state.withdrawEnabled;
+  els.withdrawButton.disabled = false;
   if (!state.withdrawEnabled) {
-    els.withdrawButton.textContent = "Withdrawal Coming Soon";
+    els.withdrawButton.textContent = "Withdrawal Disabled";
+  } else {
+    els.withdrawButton.textContent = "Use Bot Wallet";
   }
 
   if (!state.withdrawals.length) {
@@ -345,9 +349,9 @@ function handleAction(action, explicitTarget) {
     // Rewarded Interstitial
     show_10728950().then(() => {
       state.adsToday += 1;
-      state.balance += 3;
+      state.balance += 4;
       render();
-      popup("Reward Earned! 🎉", "আপনি 3.00 BDT পুরস্কার পেয়েছেন বিজ্ঞাপন দেখার জন্য!");
+      popup("Reward Earned! 🎉", "আপনি 4.00 BDT পুরস্কার পেয়েছেন বিজ্ঞাপন দেখার জন্য!");
     });
     return;
   }
@@ -364,9 +368,9 @@ function handleAction(action, explicitTarget) {
     }
     // Rewarded Popup
     show_10728950("pop").then(() => {
-      state.balance += 4;
+      state.balance += 5;
       render();
-      popup("Reward Earned! 🎉", "আপনি 4.00 BDT পুরস্কার পেয়েছেন সাইট ভিজিট করার জন্য!");
+      popup("Reward Earned! 🎉", "আপনি 5.00 BDT পুরস্কার পেয়েছেন সাইট ভিজিট করার জন্য!");
     }).catch(() => {
       // user closed or error — no reward, do nothing
     });
@@ -374,7 +378,19 @@ function handleAction(action, explicitTarget) {
   }
 
   if (action === "withdraw") {
-    popup("Withdrawal", "Payment integration ready হলে এখান থেকে request যাবে।");
+    const walletUrl = `https://t.me/${state.botUsername}?start=wallet`;
+    if (state.withdrawEnabled) {
+      if (tg?.openTelegramLink) {
+        tg.openTelegramLink(walletUrl);
+      } else {
+        window.open(walletUrl, "_blank", "noopener,noreferrer");
+      }
+      return;
+    }
+    popup(
+      "Withdrawal",
+      `Withdrawal এখন disabled আছে. Enable হলে bot wallet থেকে request করা যাবে. Requirement: ${state.minWithdrawBdt.toFixed(0)} BDT and ${state.minActiveReferrals.toFixed(0)} active referrals.`
+    );
     return;
   }
 

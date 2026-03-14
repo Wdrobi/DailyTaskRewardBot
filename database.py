@@ -27,7 +27,7 @@ class Database:
                 "📺 অ্যাড দেখুন",
                 "link",
                 "https://example.com/ad",
-                300,
+                400,
                 30,
                 3600,
                 15,
@@ -41,7 +41,7 @@ class Database:
                 "🌐 সাইট ভিজিট করুন",
                 "link",
                 "https://example.com/site1",
-                400,
+                500,
                 15,
                 14400,
                 10,
@@ -55,7 +55,7 @@ class Database:
                 "✅ এখনই নিন",
                 "instant",
                 "",
-                200,
+                300,
                 1,
                 86400,
                 0,
@@ -171,13 +171,13 @@ class Database:
 
             await self._seed_default_tasks(db)
             await db.execute(
-                "UPDATE tasks SET daily_limit = 30, reward_points = 300 WHERE task_key = 'watch_ad'"
+                "UPDATE tasks SET daily_limit = 30, reward_points = 400 WHERE task_key = 'watch_ad'"
             )
             await db.execute(
-                "UPDATE tasks SET daily_limit = 15, reward_points = 400 WHERE task_key = 'visit_site'"
+                "UPDATE tasks SET daily_limit = 15, reward_points = 500 WHERE task_key = 'visit_site'"
             )
             await db.execute(
-                "UPDATE tasks SET reward_points = 200 WHERE task_key = 'daily_checkin'"
+                "UPDATE tasks SET reward_points = 300 WHERE task_key = 'daily_checkin'"
             )
             await db.commit()
         logger.info("ডেটাবেস সফলভাবে প্রস্তুত।")
@@ -426,7 +426,11 @@ class Database:
     async def get_referral_count(self, user_id: int) -> int:
         async with aiosqlite.connect(self.db_path) as db:
             async with db.execute(
-                "SELECT COUNT(*) FROM referrals WHERE referrer_id = ?", (user_id,)
+                "SELECT COUNT(*) "
+                "FROM referrals r "
+                "JOIN users u ON u.user_id = r.referred_id "
+                "WHERE r.referrer_id = ? AND u.is_banned = 0",
+                (user_id,)
             ) as cur:
                 row = await cur.fetchone()
                 return row[0] if row else 0

@@ -3,6 +3,13 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
+
+def _env_bool(name: str, default: bool = False) -> bool:
+    value = os.getenv(name)
+    if value is None:
+        return default
+    return value.strip().lower() in {"1", "true", "yes", "on"}
+
 BOT_TOKEN: str = os.getenv("BOT_TOKEN", "")
 BOT_USERNAME: str = os.getenv("BOT_USERNAME", "YourBot")
 DATABASE_PATH: str = os.getenv("DATABASE_PATH", "bot_database.db")
@@ -24,9 +31,9 @@ ADMIN_PASSWORD: str = os.getenv("ADMIN_PASSWORD", "")
 
 # ---------- টাস্ক রিওয়ার্ড (পয়েন্ট) ----------
 TASK_REWARDS: dict[str, int] = {
-    "watch_ad":      300,
-    "visit_site":    400,
-    "daily_checkin": 200,
+    "watch_ad":      400,
+    "visit_site":    500,
+    "daily_checkin": 300,
 }
 
 # রেফারেল রিওয়ার্ড
@@ -51,9 +58,11 @@ MIN_AD_WATCH_SECONDS: int = 15
 MIN_SITE_VISIT_SECONDS: int = 10
 
 # ---------- উইথড্রয়াল সেটিংস ----------
-WITHDRAWAL_ENABLED: bool = False       # পেমেন্ট ইন্টিগ্রেশন সম্পন্ন হলে True করুন
-MIN_WITHDRAWAL_POINTS: int = 500        # ন্যূনতম উত্তোলনযোগ্য পয়েন্ট
 POINTS_PER_TAKA: int = 100              # 100 পয়েন্ট = 1 টাকা
+WITHDRAWAL_ENABLED: bool = _env_bool("WITHDRAWAL_ENABLED", True)
+MIN_WITHDRAWAL_BDT: int = int(os.getenv("MIN_WITHDRAWAL_BDT", "500"))
+MIN_ACTIVE_REFERRALS: int = int(os.getenv("MIN_ACTIVE_REFERRALS", "10"))
+MIN_WITHDRAWAL_POINTS: int = MIN_WITHDRAWAL_BDT * POINTS_PER_TAKA
 
 # ---------- স্যাম্পল অ্যাড / সাইট URL (পরে DB থেকে নেওয়া যাবে) ----------
 AD_URL: str = "https://example.com/ad"

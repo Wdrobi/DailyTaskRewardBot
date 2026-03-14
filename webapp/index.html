@@ -1,0 +1,212 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <title>Daily Rich Mini App</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css">
+  <script src="https://telegram.org/js/telegram-web-app.js"></script>
+</head>
+<body>
+  <div class="app-shell">
+    <div class="backdrop backdrop-a"></div>
+    <div class="backdrop backdrop-b"></div>
+
+    <main class="screen-stack">
+      <section class="screen is-active" data-screen="home">
+        <header class="hero-card">
+          <div class="profile-chip">
+            <div class="avatar" id="avatarInitial">D</div>
+            <div>
+              <h1 id="displayName">Hi, User</h1>
+              <span class="status-pill" id="statusPill">Active</span>
+            </div>
+          </div>
+        </header>
+
+        <section class="balance-card">
+          <p class="section-kicker">Total Balance</p>
+          <h2 class="balance-value" id="balanceValue">BDT 0.00</h2>
+          <div class="stats-grid">
+            <article class="stat-box">
+              <p>Today's Ads</p>
+              <strong id="adsToday">0 / 0</strong>
+            </article>
+            <article class="stat-box">
+              <p>Referrals</p>
+              <strong id="referralsCount">0</strong>
+            </article>
+          </div>
+        </section>
+
+        <section class="action-grid home-grid">
+          <button class="feature-card accent-gold" data-action="leaderboard" data-target="home" type="button">
+            <span class="feature-icon">LB</span>
+            <strong>Leaderboard</strong>
+            <small>Top 100 Players</small>
+          </button>
+          <button class="feature-card accent-violet" data-action="referral" data-target="referral" type="button">
+            <span class="feature-icon">IE</span>
+            <strong>Invite &amp; Earn</strong>
+            <small>Get Commission</small>
+          </button>
+          <button class="feature-card accent-coral" data-action="tasks" data-target="tasks" type="button">
+            <span class="feature-icon">TK</span>
+            <strong>Tasks</strong>
+            <small><span id="homeTasksCompleted">0</span> Completed</small>
+          </button>
+          <button class="feature-card accent-mint" data-action="wallet" data-target="wallet" type="button">
+            <span class="feature-icon">WL</span>
+            <strong>Wallet</strong>
+            <small>Withdraw &amp; History</small>
+          </button>
+        </section>
+      </section>
+
+      <section class="screen" data-screen="tasks">
+        <section class="compact-card mini-balance">
+          <div class="mini-balance-row">
+            <div class="mini-avatar" id="miniAvatarInitial">D</div>
+            <div>
+              <p class="micro-label">Total Balance</p>
+              <strong class="mini-balance-value" id="tasksBalanceValue">0.00 BDT</strong>
+            </div>
+          </div>
+        </section>
+
+        <section class="compact-card goals-card">
+          <div class="row-between">
+            <h2 class="panel-title">Daily Goals</h2>
+            <span class="goals-counter" id="goalsCounter">0 / 0</span>
+          </div>
+          <div class="slim-progress">
+            <div class="slim-progress-fill" id="goalProgressFill"></div>
+          </div>
+          <p class="helper-text" id="goalHelperText">You have 0 tasks remaining today</p>
+        </section>
+
+        <section class="task-list" id="taskListContainer"></section>
+      </section>
+
+      <section class="screen" data-screen="referral">
+        <header class="page-header center-header">
+          <h2>Invite Friends</h2>
+          <p>Earn 100.00 BDT for every referral</p>
+        </header>
+
+        <section class="stats-grid referral-top-grid">
+          <article class="stat-box stat-box-strong accent-violet-box">
+            <p>Total Referrals</p>
+            <strong id="referralTotal">0</strong>
+          </article>
+          <article class="stat-box stat-box-strong accent-mint-box">
+            <p>Total Earnings</p>
+            <strong id="referralEarnings">0.00 BDT</strong>
+          </article>
+        </section>
+
+        <section class="list-card referral-card">
+          <h3>Refer a friend and earn</h3>
+          <div class="referral-banner">Share your referral link and invite your friends!<br>Earn 100.00 BDT for every referral</div>
+          <div class="referral-link-box">
+            <input id="referralLinkInput" class="referral-link-input" type="text" readonly title="Referral link" aria-label="Referral link" placeholder="Referral link">
+            <button class="copy-button" id="copyReferralButton" type="button">Copy</button>
+          </div>
+          <button class="share-button" id="shareReferralButton" type="button">Share to Telegram</button>
+        </section>
+
+        <section class="list-card empty-card">
+          <div class="list-header">
+            <h3>My Referrals</h3>
+            <span class="muted-note" id="friendCountNote">0 Friends</span>
+          </div>
+          <div id="referralListContainer"></div>
+        </section>
+      </section>
+
+      <section class="screen" data-screen="wallet">
+        <header class="page-header center-header wallet-header">
+          <h2>Wallet &amp; History</h2>
+          <p>Manage your earnings</p>
+        </header>
+
+        <section class="balance-card wallet-balance-card">
+          <p class="section-kicker">Current Balance</p>
+          <h2 class="balance-value wallet-value" id="walletBalanceValue">0.00 BDT</h2>
+        </section>
+
+        <button class="withdraw-button" id="withdrawButton" type="button">Request Withdrawal</button>
+
+        <section class="list-card empty-card wallet-history-card">
+          <div class="list-header">
+            <h3>Withdrawal History</h3>
+            <span class="muted-note">Last 20</span>
+          </div>
+          <div id="withdrawalHistoryContainer"></div>
+        </section>
+      </section>
+
+      <section class="screen" data-screen="support">
+        <header class="page-header center-header support-header">
+          <h2>Support Center</h2>
+          <p>We are here to help you</p>
+        </header>
+
+        <section class="list-card support-video-card">
+          <div class="support-video-top">
+            <div>
+              <h3>How it works?</h3>
+              <p>Watch the tutorial video</p>
+            </div>
+          </div>
+          <button class="video-thumb" id="tutorialButton" type="button">
+            <span class="video-play">PLAY</span>
+            <span class="video-caption">Daily Rich tutorial</span>
+          </button>
+        </section>
+
+        <section class="contact-section">
+          <div class="section-heading-line"></div>
+          <h3>Contact Us</h3>
+        </section>
+
+        <section class="contact-grid">
+          <button class="contact-card accent-violet-box" data-action="telegram-support" type="button">
+            <span class="contact-icon">TG</span>
+            <strong>Telegram</strong>
+            <small>Direct Message</small>
+          </button>
+          <button class="contact-card accent-violet-soft" data-action="email-support" type="button">
+            <span class="contact-icon">EM</span>
+            <strong>Email</strong>
+            <small>Send Inquiry</small>
+          </button>
+          <button class="contact-card accent-gold-box" data-action="faq" type="button">
+            <span class="contact-icon">FAQ</span>
+            <strong>FAQ</strong>
+            <small>Common Questions</small>
+          </button>
+          <button class="contact-card accent-mint-box" data-action="live-chat" type="button">
+            <span class="contact-icon">LC</span>
+            <strong>Live Chat</strong>
+            <small>Instant Help</small>
+          </button>
+        </section>
+      </section>
+    </main>
+
+    <nav class="bottom-nav">
+      <button class="nav-item active" data-target="home" type="button"><span class="nav-icon">HM</span><span>Home</span></button>
+      <button class="nav-item" data-target="support" type="button"><span class="nav-icon">SP</span><span>Support</span></button>
+      <button class="nav-item" data-target="tasks" type="button"><span class="nav-icon">TS</span><span>Tasks</span></button>
+      <button class="nav-item" data-target="referral" type="button"><span class="nav-icon">RF</span><span>Referral</span></button>
+      <button class="nav-item" data-target="wallet" type="button"><span class="nav-icon">WL</span><span>Wallet</span></button>
+    </nav>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>

@@ -1,0 +1,26 @@
+# Secrets and local config
+.env
+
+# Python cache/build artifacts
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.so
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# Local runtime data
+bot.log
+bot_database.db
+
+# OS/editor noise
+.DS_Store
+Thumbs.db
+.vscode/
